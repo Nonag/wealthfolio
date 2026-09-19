@@ -164,9 +164,9 @@ impl InsightService {
             .collect();
 
         // "Other" is the catch-all bucket for categories that aren't assigned
-        // to any explicit group. It's seeded by the migration + ensured by
-        // BudgetService::ensure_system_groups, so it normally exists. If the
-        // user has deleted/renamed it, degrade gracefully: fall back to the
+        // to any explicit group. It's seeded by the migration and protected
+        // from deletion by BudgetService::delete_group (guard on the "other"
+        // key), but degrade gracefully anyway: fall back to the
         // last group (typically the lowest-priority one) and log a warning
         // rather than blanking the whole dashboard. If no groups exist at all
         // we return an empty insight — the user hasn't set anything up yet.
@@ -175,8 +175,7 @@ impl InsightService {
             None => match groups.last() {
                 Some(fallback) => {
                     log::warn!(
-                        "spending insight: 'Other' budget group missing; falling back to '{}' as catch-all. \
-                         Run BudgetService::reset_groups() or restore the seed to fix.",
+                        "spending insight: \"Other\" budget group missing; falling back to '{}' as catch-all.",
                         fallback.name,
                     );
                     fallback.id.clone()

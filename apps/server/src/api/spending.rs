@@ -641,20 +641,6 @@ async fn assign_category_to_group(
     ))
 }
 
-async fn reset_budget_groups(
-    State(state): State<Arc<AppState>>,
-    Query(query): Query<BudgetQuery>,
-) -> ApiResult<Json<BudgetSnapshot>> {
-    let base = state.base_currency()?;
-    let timezone = state.timezone()?;
-    Ok(Json(
-        state
-            .budget_service
-            .reset_groups(query.period_key, &base, &timezone)
-            .await?,
-    ))
-}
-
 async fn get_spending_report(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<ReportRequest>,
@@ -808,7 +794,6 @@ pub fn router() -> Router<Arc<AppState>> {
             delete(delete_budget_rollover_setting),
         )
         .route("/spending/budget/groups", post(create_budget_group))
-        .route("/spending/budget/groups/reset", post(reset_budget_groups))
         .route(
             "/spending/budget/groups/{id}",
             put(update_budget_group).delete(delete_budget_group),

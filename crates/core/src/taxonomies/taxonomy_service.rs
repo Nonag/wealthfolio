@@ -252,50 +252,6 @@ impl TaxonomyServiceTrait for TaxonomyService {
     }
 
     async fn delete_category(&self, taxonomy_id: &str, category_id: &str) -> Result<usize> {
-        // Check for child categories
-        let categories = self.repository.get_categories(taxonomy_id)?;
-        let has_children = categories
-            .iter()
-            .any(|c| c.parent_id.as_deref() == Some(category_id));
-        if has_children {
-            return Err(ValidationError::InvalidInput(
-                "Cannot delete category with children".to_string(),
-            )
-            .into());
-        }
-
-        // Check for assignments
-        let assignments = self
-            .repository
-            .get_category_assignments(taxonomy_id, category_id)?;
-        if !assignments.is_empty() {
-            return Err(ValidationError::InvalidInput(format!(
-                "Cannot delete category with {} asset assignments",
-                assignments.len()
-            ))
-            .into());
-        }
-        let spending_references = self
-            .repository
-            .get_category_spending_reference_count(taxonomy_id, category_id)?;
-        if spending_references > 0 {
-            return Err(ValidationError::InvalidInput(format!(
-                "Cannot delete category with {} spending references",
-                spending_references
-            ))
-            .into());
-        }
-        let allocation_target_references = self
-            .repository
-            .get_category_allocation_target_weight_count(taxonomy_id, category_id)?;
-        if allocation_target_references > 0 {
-            return Err(ValidationError::InvalidInput(format!(
-                "Cannot delete category with {} allocation target references",
-                allocation_target_references
-            ))
-            .into());
-        }
-
         self.repository
             .delete_category(taxonomy_id, category_id)
             .await

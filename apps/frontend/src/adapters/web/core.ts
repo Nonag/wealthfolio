@@ -211,7 +211,6 @@ export const COMMANDS: CommandMap = {
   update_budget_group: { method: "PUT", path: "/spending/budget/groups" },
   delete_budget_group: { method: "DELETE", path: "/spending/budget/groups" },
   assign_category_to_group: { method: "POST", path: "/spending/budget/group-assignments" },
-  reset_budget_groups: { method: "POST", path: "/spending/budget/groups/reset" },
   copy_budget_targets: { method: "POST", path: "/spending/budget/copy" },
   // Spending settings
   get_spending_settings: { method: "GET", path: "/spending/settings" },
@@ -1351,11 +1350,6 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
       };
       addPeriodKey(periodKey);
       body = JSON.stringify({ categoryId, groupId });
-      break;
-    }
-    case "reset_budget_groups": {
-      const { periodKey } = (payload ?? {}) as { periodKey?: string };
-      addPeriodKey(periodKey);
       break;
     }
     case "copy_budget_targets": {

@@ -721,21 +721,6 @@ pub async fn assign_category_to_group(
 }
 
 #[tauri::command]
-pub async fn reset_budget_groups(
-    period_key: Option<String>,
-    state: State<'_, DatabaseRuntime>,
-) -> Result<BudgetSnapshot, String> {
-    let context = state.context()?;
-    let base_currency = context.get_base_currency();
-    let timezone = context.get_timezone();
-    context
-        .budget_service()
-        .reset_groups(period_key, &base_currency, &timezone)
-        .await
-        .map_err(|e| format!("Failed to reset budget groups: {}", e))
-}
-
-#[tauri::command]
 pub async fn copy_budget_targets(
     source_period_key: String,
     target_period_key: String,

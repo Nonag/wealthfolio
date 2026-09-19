@@ -11,7 +11,6 @@ import {
   deleteBudgetRolloverSetting,
   deleteBudgetTarget,
   getBudget,
-  resetBudgetGroups,
   updateBudgetGroup,
   upsertBudgetRolloverSetting,
   upsertBudgetTarget,
@@ -82,10 +81,10 @@ export function useBudgetMutations(periodKey?: string) {
     mutationFn: ({ id, reassignToGroupId }: { id: string; reassignToGroupId: string }) =>
       deleteBudgetGroup(id, reassignToGroupId, periodKey),
     onSuccess: invalidate,
-    onError: (error) =>
-      toast.error(
-        error instanceof Error && error.message ? error.message : "Failed to delete budget group.",
-      ),
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(message || "Failed to delete budget group.");
+    },
   });
 
   const assignCategory = useMutation({
@@ -93,12 +92,6 @@ export function useBudgetMutations(periodKey?: string) {
       assignCategoryToGroup(categoryId, groupId, periodKey),
     onSuccess: invalidate,
     onError: () => toast.error("Failed to move category."),
-  });
-
-  const resetGroups = useMutation({
-    mutationFn: () => resetBudgetGroups(periodKey),
-    onSuccess: invalidate,
-    onError: () => toast.error("Failed to reset budget groups."),
   });
 
   const copyFromMonth = useMutation({
@@ -131,7 +124,6 @@ export function useBudgetMutations(periodKey?: string) {
     updateGroup,
     removeGroup,
     assignCategory,
-    resetGroups,
     copyFromMonth,
   };
 }
