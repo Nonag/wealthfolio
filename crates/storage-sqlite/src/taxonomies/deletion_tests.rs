@@ -30,12 +30,6 @@ const REFERENCES: &[(&str, &str, &str)] = &[
         "spending references (budget targets)",
     ),
     (
-        "budget_rollover_settings",
-        "INSERT INTO budget_rollover_settings(id,target_type,taxonomy_id,category_id,enabled,start_month,starting_balance)
-         VALUES ('reference','category',?1,?2,0,'2026-09','-12.3456789')",
-        "spending references (rollover settings)",
-    ),
-    (
         "spending_categorization_rules",
         "INSERT INTO spending_categorization_rules(id,name,pattern,taxonomy_id,category_id)
          VALUES ('reference','Keep rule','merchant',?1,?2)",
@@ -101,6 +95,10 @@ fn fixture() -> (
 #[tokio::test]
 async fn every_reference_blocks_root_child_and_grandchild_without_data_loss() {
     let (_dir, conn, repo, writer) = fixture();
+    conn.execute_batch(
+        "INSERT INTO budget_rollover_settings(id,target_type,taxonomy_id,category_id,enabled,start_month,starting_balance)
+         VALUES ('stored-rollover','category','spending_categories','test-child',0,'2026-09','-12.3456789');",
+    ).unwrap();
     for &(table, insert, kind) in REFERENCES {
         for category in ["test-root", "test-child", "test-grandchild"] {
             conn.execute(insert, ["spending_categories", category])
@@ -119,6 +117,23 @@ async fn every_reference_blocks_root_child_and_grandchild_without_data_loss() {
                     .get_category("spending_categories", id)
                     .unwrap()
                     .is_some());
+            }
+            let rollover: (i64, String, String) = conn
+                .query_row(
+                    "SELECT enabled,start_month,starting_balance FROM budget_rollover_settings
+                 WHERE id = 'stored-rollover'",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                )
+                .unwrap();
+            assert_eq!(rollover, (0, "2026-09".into(), "-12.3456789".into()));
+            for table in ["sync_outbox", "sync_entity_metadata"] {
+                let count: i64 = conn
+                    .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                        row.get(0)
+                    })
+                    .unwrap();
+                assert_eq!(count, 0, "{table}");
             }
             if table == "spending_activity_splits" {
                 let split: (String, String, String, String) = conn.query_row(
@@ -144,6 +159,110 @@ async fn every_reference_blocks_root_child_and_grandchild_without_data_loss() {
         }
     }
     writer.shutdown().await;
+}
+
+#[tokio::test]
+async fn rollover_cleanup_projects_stored_ids_only_for_deleted_subtree() {
+    for category in ["test-root", "test-child"] {
+        let (_dir, conn, repo, writer) = fixture();
+        conn.execute_batch(
+            "INSERT INTO budget_rollover_settings(id,target_type,taxonomy_id,category_id,enabled,start_month,starting_balance)
+             SELECT 'stored:' || taxonomy_id || ':' || id,'category',taxonomy_id,id,
+                    CASE WHEN id = 'test-child' THEN 0 ELSE 1 END,'2026-09','-12.3456789'
+             FROM taxonomy_categories WHERE id LIKE 'test-%';
+             INSERT INTO budget_rollover_settings(id,target_type,group_id,enabled,start_month,starting_balance)
+             VALUES ('stored-group-rollover','group','test-group',1,'2026-08','42.123456789');",
+        ).unwrap();
+        let mut settings = conn.prepare(
+            "SELECT id,enabled,start_month,starting_balance FROM budget_rollover_settings ORDER BY id",
+        ).unwrap();
+        let before = settings
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(
+            repo.delete_category("spending_categories", category)
+                .await
+                .unwrap(),
+            1
+        );
+        let mut deleted_ids = Vec::new();
+        for id in ["test-root", "test-child", "test-grandchild", "test-sibling"] {
+            let deleted = id != "test-sibling" && (category == "test-root" || id != "test-root");
+            assert_eq!(
+                repo.get_category("spending_categories", id)
+                    .unwrap()
+                    .is_none(),
+                deleted
+            );
+            assert!(repo
+                .get_category("savings_categories", id)
+                .unwrap()
+                .is_some());
+            if deleted {
+                deleted_ids.push(format!("stored:spending_categories:{id}"));
+            }
+        }
+        deleted_ids.sort();
+        let remaining = settings
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                ))
+            })
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(
+            remaining,
+            before
+                .into_iter()
+                .filter(|row| !deleted_ids.contains(&row.0))
+                .collect::<Vec<_>>()
+        );
+        let events = conn
+            .prepare(
+                "SELECT o.entity_id,o.op,o.payload,
+                    EXISTS (SELECT 1 FROM sync_entity_metadata m
+                            WHERE m.entity = o.entity AND m.entity_id = o.entity_id
+                              AND m.last_event_id = o.event_id AND m.last_op = 'delete')
+             FROM sync_outbox o WHERE o.entity = 'budget_rollover_setting' ORDER BY o.entity_id",
+            )
+            .unwrap()
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, bool>(3)?,
+                ))
+            })
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap();
+        assert_eq!(events.len(), deleted_ids.len());
+        for ((id, op, payload, has_metadata), expected_id) in events.into_iter().zip(deleted_ids) {
+            assert_eq!(id, expected_id);
+            assert_eq!(op, "delete");
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&payload).unwrap(),
+                serde_json::json!({ "id": id })
+            );
+            assert!(has_metadata);
+        }
+        writer.shutdown().await;
+    }
 }
 
 #[tokio::test]

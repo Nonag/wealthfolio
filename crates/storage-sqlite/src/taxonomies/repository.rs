@@ -25,6 +25,7 @@ use crate::errors::StorageError;
 use crate::schema::{
     allocation_target_weights, asset_taxonomy_assignments, taxonomies, taxonomy_categories,
 };
+use crate::spending::budget::BudgetRolloverSettingDB;
 
 pub struct TaxonomyRepository {
     pool: Arc<Pool<r2d2::ConnectionManager<SqliteConnection>>>,
@@ -280,8 +281,6 @@ impl TaxonomyRepositoryTrait for TaxonomyRepository {
                     #[diesel(sql_type = BigInt)]
                     targets: i64,
                     #[diesel(sql_type = BigInt)]
-                    rollover: i64,
-                    #[diesel(sql_type = BigInt)]
                     rules: i64,
                     #[diesel(sql_type = BigInt)]
                     allocation: i64,
@@ -289,15 +288,15 @@ impl TaxonomyRepositoryTrait for TaxonomyRepository {
 
                 // The writer's immediate transaction holds the write lock through deletion.
                 // Match the composite FK cascade, including every descendant, in one query.
-                let references = diesel::sql_query(
-                    "WITH RECURSIVE subtree(taxonomy_id, id) AS (
+                let subtree = "WITH RECURSIVE subtree(taxonomy_id, id) AS (
                         SELECT taxonomy_id, id FROM taxonomy_categories
                         WHERE taxonomy_id = ? AND id = ?
                         UNION
                         SELECT c.taxonomy_id, c.id FROM taxonomy_categories c
                         JOIN subtree s ON c.taxonomy_id = s.taxonomy_id AND c.parent_id = s.id
-                    )
-                    SELECT
+                    )";
+                let references = diesel::sql_query(format!(
+                    "{subtree} SELECT
                         (SELECT COUNT(*) FROM asset_taxonomy_assignments
                          WHERE (taxonomy_id, category_id) IN (SELECT * FROM subtree)) AS assets,
                         (SELECT COUNT(*) FROM activity_taxonomy_assignments
@@ -306,13 +305,11 @@ impl TaxonomyRepositoryTrait for TaxonomyRepository {
                          WHERE (taxonomy_id, category_id) IN (SELECT * FROM subtree)) AS splits,
                         (SELECT COUNT(*) FROM budget_targets
                          WHERE (taxonomy_id, category_id) IN (SELECT * FROM subtree)) AS targets,
-                        (SELECT COUNT(*) FROM budget_rollover_settings
-                         WHERE (taxonomy_id, category_id) IN (SELECT * FROM subtree)) AS rollover,
                         (SELECT COUNT(*) FROM spending_categorization_rules
                          WHERE (taxonomy_id, category_id) IN (SELECT * FROM subtree)) AS rules,
                         (SELECT COUNT(*) FROM allocation_target_weights
                          WHERE (taxonomy_id, category_id) IN (SELECT * FROM subtree)) AS allocation",
-                )
+                ))
                 .bind::<Text, _>(&taxonomy_id)
                 .bind::<Text, _>(&category_id)
                 .get_result::<References>(conn)
@@ -323,7 +320,6 @@ impl TaxonomyRepositoryTrait for TaxonomyRepository {
                     (references.activities, "spending references (activity assignments)"),
                     (references.splits, "spending references (transaction splits)"),
                     (references.targets, "spending references (budget targets)"),
-                    (references.rollover, "spending references (rollover settings)"),
                     (references.rules, "spending references (categorization rules)"),
                     (references.allocation, "allocation target references"),
                 ] {
@@ -333,6 +329,26 @@ impl TaxonomyRepositoryTrait for TaxonomyRepository {
                         ))
                         .into());
                     }
+                }
+
+                #[derive(QueryableByName)]
+                struct RolloverId {
+                    #[diesel(sql_type = Text)]
+                    id: String,
+                }
+
+                // Capture stored IDs before the category FK cascade removes the settings.
+                let rollovers = diesel::sql_query(format!(
+                    "{subtree} SELECT id FROM budget_rollover_settings
+                     WHERE target_type = 'category'
+                       AND (taxonomy_id, category_id) IN (SELECT * FROM subtree)"
+                ))
+                .bind::<Text, _>(&taxonomy_id)
+                .bind::<Text, _>(&category_id)
+                .load::<RolloverId>(conn)
+                .map_err(StorageError::from)?;
+                for rollover in rollovers {
+                    projection.capture_delete::<BudgetRolloverSettingDB>(rollover.id);
                 }
 
                 // Check eligibility before the delete
