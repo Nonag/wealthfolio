@@ -1,3 +1,7 @@
+import { StartupScreen } from "@/components/startup-screen";
+import { useProfile } from "@/features/profiles/profile-context";
+import { Button } from "@wealthfolio/ui";
+import { useTranslation } from "react-i18next";
 import { isDesktop, logger } from "@/adapters";
 import { setAddonLocalizationSnapshot } from "@/addons/iframe/addon-sandbox-localization";
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
@@ -34,7 +38,12 @@ interface ExtendedSettingsContextType extends SettingsContextType {
 const SettingsContext = createContext<ExtendedSettingsContextType | undefined>(undefined);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const { data, isLoading, isError, refetch } = useSettings();
+  const { data, error, isLoading, isError, refetch } = useSettings();
+  const profile = useProfile();
+  const { t } = useTranslation("common", { useSuspense: false });
+  const [appearanceReady, setAppearanceReady] = useState(false);
+  const [appearanceError, setAppearanceError] = useState<string>();
+  const [appearanceAttempt, setAppearanceAttempt] = useState(0);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [accountsGrouped, setAccountsGrouped] = useState(true);
 
@@ -69,16 +78,35 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
+    let cancelled = false;
     if (data) {
-      setSettings(data);
-      applySettingsToDocument(data);
+      void applySettingsToDocument(data)
+        .then(() => {
+          if (!cancelled) {
+            setSettings(data);
+            setAppearanceReady(true);
+            setAppearanceError(undefined);
+          }
+        })
+        .catch(() => {
+          if (!cancelled)
+            setAppearanceError(
+              t("profiles.appearanceFailed", {
+                defaultValue: "Couldn’t load appearance settings.",
+              }),
+            );
+        });
     }
-  }, [data]);
+    return () => {
+      cancelled = true;
+    };
+  }, [data, appearanceAttempt, t]);
 
   // Cleanup any lingering listeners when provider unmounts
   useEffect(() => {
     return () => {
       try {
+        appearanceGeneration += 1;
         cleanupSystemThemeListeners();
       } catch {
         // noop
@@ -118,6 +146,30 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     throw new Error("Loaded settings are missing the required UI language");
   }
 
+  if (!appearanceReady)
+    return (
+      <StartupScreen error={appearanceError ?? (isError ? String(error) : undefined)}>
+        {(isError || appearanceError) && (
+          <>
+            <Button
+              onClick={() => {
+                setAppearanceError(undefined);
+                setAppearanceAttempt((n) => n + 1);
+                void refetch();
+              }}
+            >
+              {t("retry")}
+            </Button>
+            {profile && (
+              <Button variant="ghost" onClick={profile.switchProfile}>
+                {t("profiles.switch", { defaultValue: "Switch profile" })}
+              </Button>
+            )}
+          </>
+        )}
+      </StartupScreen>
+    );
+
   return (
     <SettingsContext.Provider value={contextValue}>
       <FormattingProvider
@@ -139,6 +191,7 @@ export function useSettingsContext() {
   return context;
 }
 // Keep references to system theme listeners so we can clean up when switching modes
+let appearanceGeneration = 0;
 let tauriThemeUnlisten: (() => void) | null = null;
 let mediaQueryList: MediaQueryList | null = null;
 let mediaQueryUnsubscribe: (() => void) | null = null;
@@ -172,15 +225,15 @@ function cleanupSystemThemeListeners() {
 }
 
 // Helper function to apply settings to the document
-const applySettingsToDocument = (newSettings: Settings) => {
+const applySettingsToDocument = async (newSettings: Settings) => {
+  const application = ++appearanceGeneration;
   // Apply the stored language. This is the single source of truth for the UI
   // language — on initial load and on every change (including device-synced ones).
   const language = newSettings.language || DEFAULT_LOCALE;
-  if (i18n.language !== language) {
-    i18n.changeLanguage(language).catch(() => {
-      // noop – falls back to the default locale
-    });
+  if (i18n.language !== language || !i18n.isInitialized) {
+    await i18n.changeLanguage(language).catch(() => i18n.changeLanguage(DEFAULT_LOCALE));
   }
+  if (application !== appearanceGeneration) return;
   document.documentElement.setAttribute("lang", language);
   document.documentElement.setAttribute("dir", i18n.dir(language));
 
@@ -228,16 +281,21 @@ const applySettingsToDocument = (newSettings: Settings) => {
       (async () => {
         try {
           const { getCurrentWindow } = await import("@tauri-apps/api/window");
+          if (application !== appearanceGeneration) return;
           const currentWindow = getCurrentWindow();
           await currentWindow.setTheme(null);
           const current = await currentWindow.theme();
+          if (application !== appearanceGeneration) return;
           if (current === "dark" || current === "light") {
             applyResolvedTheme(current);
           }
-          tauriThemeUnlisten = await currentWindow.onThemeChanged(({ payload }) => {
+          const unlisten = await currentWindow.onThemeChanged(({ payload }) => {
+            if (application !== appearanceGeneration) return;
             const next = payload === "dark" ? "dark" : "light";
             applyResolvedTheme(next);
           });
+          if (application !== appearanceGeneration) unlisten();
+          else tauriThemeUnlisten = unlisten;
         } catch {
           logger.error("Error setting window theme.");
         }

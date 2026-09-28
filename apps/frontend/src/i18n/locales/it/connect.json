@@ -305,5 +305,16 @@
   },
   "errors": {
     "unknown": "Errore sconosciuto"
+  },
+  "session": {
+    "restoring": "Ripristino di Connect…",
+    "unavailable": "Connect è temporaneamente non disponibile",
+    "localAvailable": "Il portafoglio locale è disponibile. Riprova a connetterti."
+  },
+  "rebind": {
+    "title": "Cambiare la connessione Connect di questo profilo?",
+    "description": "Stai collegando un altro account o nucleo familiare. I dati locali del portafoglio verranno conservati, ma i collegamenti esistenti ai broker e la configurazione della sincronizzazione dei dispositivi verranno rimossi. Il nuovo account potrà aggiungere dati dei broker a questo profilo. Configura nuovamente la sincronizzazione dei dispositivi quando vuoi. Usa un nuovo profilo se preferisci mantenere separati i dati.",
+    "cancel": "Annulla",
+    "confirm": "Cambia connessione"
   }
 }

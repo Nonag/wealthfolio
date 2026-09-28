@@ -1,3 +1,4 @@
+import { profileAwareErrorMessage } from "@/features/profiles/error-messages";
 import { isDesktop } from "@/adapters";
 import { ExternalLink } from "@/components/external-link";
 import { getPreferredProvider, savePreferredProvider } from "@/lib/cookie-utils";
@@ -264,7 +265,8 @@ export function LoginForm() {
     clearError();
   };
 
-  const displayError = localError ?? error;
+  const rawError = localError ?? error;
+  const displayError = rawError ? profileAwareErrorMessage(rawError, t) : rawError;
 
   return (
     <div className="space-y-6">

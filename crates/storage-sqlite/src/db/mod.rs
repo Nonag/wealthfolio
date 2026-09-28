@@ -365,6 +365,8 @@ impl DbAccess {
 /// nothing more. It never looks for candidate files, pending markers or staged
 /// restores — those only exist inside a maintenance operation, which always runs
 /// to completion before the restart that follows it.
+/// Plaintext opens are attempted before consulting the key provider. Retained
+/// keys are read only when needed, and are never removed by detection.
 pub fn bootstrap(
     db_path: &str,
     provider: &dyn KeyProvider,
@@ -372,42 +374,41 @@ pub fn bootstrap(
 ) -> Result<DbAccess> {
     create_parent_dir(Path::new(db_path))?;
 
-    // Detection must survive a key store that cannot be read at all — a Linux
-    // desktop with no Secret Service, a locked keychain, a sandbox without
-    // portal access. A plaintext database has no business failing to open
-    // because of any of that, and the overwhelming majority never opted in.
-    // Remember the reason: if the file *does* turn out to be encrypted, it is
-    // the real answer rather than "no key is available".
-    let (existing_key, key_error) = match provider.existing() {
-        Ok(key) => (key, None),
-        Err(e) => {
-            warn!("Could not read the database key: {}", e);
-            (None, Some(e.to_string()))
-        }
-    };
-
-    let access = if database_file_exists(db_path) {
-        probe(db_path, existing_key.map(Arc::new))
-            .map_err(|e| explain_with_key_error(e, key_error.as_deref()))?
+    let file_exists = database_file_exists(db_path);
+    // A retained key does not imply encryption. Probe existing files without a
+    // key first so plaintext startup never prompts for access to the key store.
+    let plaintext = if file_exists {
+        opens_with(db_path, None)
     } else {
-        match policy {
-            EncryptionPolicy::Plaintext => DbAccess::plaintext(db_path),
-            // Creating an encrypted database genuinely requires the key, so an
-            // unreadable store is fatal here — unlike during detection.
-            EncryptionPolicy::Encrypted => {
-                if let Some(reason) = key_error {
-                    return Err(Error::Database(DatabaseError::Encryption(format!(
-                        "Cannot create an encrypted database: the key store is unavailable ({reason})"
-                    ))));
-                }
-                // Reuse a retained key rather than minting a second one, so
-                // backups taken under the first key stay openable.
-                let key = match existing_key {
-                    Some(key) => key,
-                    None => provider.create()?,
-                };
-                DbAccess::encrypted(db_path, Arc::new(key))
+        matches!(policy, EncryptionPolicy::Plaintext)
+    };
+    let access = if plaintext {
+        DbAccess::plaintext(db_path)
+    } else {
+        // Preserve the actual key-store failure for encrypted-database errors.
+        let (existing_key, key_error) = match provider.existing() {
+            Ok(key) => (key, None),
+            Err(e) => {
+                warn!("Could not read the database key: {}", e);
+                (None, Some(e.to_string()))
             }
+        };
+        if file_exists {
+            probe(db_path, existing_key.map(Arc::new))
+                .map_err(|e| explain_with_key_error(e, key_error.as_deref()))?
+        } else {
+            if let Some(reason) = key_error {
+                return Err(Error::Database(DatabaseError::Encryption(format!(
+                    "Cannot create an encrypted database: the key store is unavailable ({reason})"
+                ))));
+            }
+            // Reuse a retained key rather than minting a second one, so
+            // backups taken under the first key stay openable.
+            let key = match existing_key {
+                Some(key) => key,
+                None => provider.create()?,
+            };
+            DbAccess::encrypted(db_path, Arc::new(key))
         }
     };
 
@@ -540,10 +541,11 @@ mod encryption_tests {
     use std::sync::Mutex;
     use tempfile::TempDir;
 
-    /// A `KeyProvider` that records whether `create()` was ever reached, so the
-    /// tests can assert that detection never mints a key.
+    /// Records key reads and creation so plaintext startup can avoid the store
+    /// and encryption detection can never mint a replacement key.
     struct TestKeyProvider {
         key: Mutex<Option<DbEncryptionKey>>,
+        reads: Mutex<usize>,
         creates: Mutex<usize>,
     }
 
@@ -551,6 +553,7 @@ mod encryption_tests {
         fn empty() -> Self {
             Self {
                 key: Mutex::new(None),
+                reads: Mutex::new(0),
                 creates: Mutex::new(0),
             }
         }
@@ -558,6 +561,7 @@ mod encryption_tests {
         fn with_key(key: DbEncryptionKey) -> Self {
             Self {
                 key: Mutex::new(Some(key)),
+                reads: Mutex::new(0),
                 creates: Mutex::new(0),
             }
         }
@@ -569,6 +573,7 @@ mod encryption_tests {
 
     impl KeyProvider for TestKeyProvider {
         fn existing(&self) -> Result<Option<DbEncryptionKey>> {
+            *self.reads.lock().unwrap() += 1;
             Ok(self.key.lock().unwrap().clone())
         }
 
@@ -705,6 +710,7 @@ mod encryption_tests {
 
         assert!(!access.is_encrypted());
         assert_eq!(provider.creates(), 0, "opting out must never mint a key");
+        assert_eq!(*provider.reads.lock().unwrap(), 0);
     }
 
     #[test]
@@ -721,6 +727,21 @@ mod encryption_tests {
     }
 
     #[test]
+    fn creating_an_encrypted_database_reports_an_unavailable_key_store() {
+        let dir = TempDir::new().unwrap();
+        let db = temp_db_path(&dir);
+        let error = bootstrap(&db, &BrokenKeyProvider, EncryptionPolicy::Encrypted).unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Cannot create an encrypted database"),
+            "{error}"
+        );
+        assert!(error.to_string().contains("no Secret Service"), "{error}");
+        assert!(!Path::new(&db).exists());
+    }
+
+    #[test]
     fn a_missing_database_reuses_a_retained_key_rather_than_minting_a_second() {
         let dir = TempDir::new().unwrap();
         let key = DbEncryptionKey::generate();
@@ -734,17 +755,36 @@ mod encryption_tests {
     }
 
     #[test]
-    fn an_existing_plaintext_database_opens_through_the_unkeyed_fallback() {
+    fn an_existing_plaintext_database_opens_without_reading_the_retained_key() {
         // A retained key beside a plaintext database is the normal state after a
         // disable, not an anomaly: only probing decides.
         let dir = TempDir::new().unwrap();
         seed(&DbAccess::plaintext(temp_db_path(&dir)));
-        let provider = TestKeyProvider::with_key(DbEncryptionKey::generate());
+        let key = DbEncryptionKey::generate();
+        let provider = TestKeyProvider::with_key(key.clone());
 
-        let access =
-            bootstrap(&temp_db_path(&dir), &provider, EncryptionPolicy::Plaintext).unwrap();
+        for policy in [EncryptionPolicy::Plaintext, EncryptionPolicy::Encrypted] {
+            let access = bootstrap(&temp_db_path(&dir), &provider, policy).unwrap();
+            assert!(!access.is_encrypted());
+        }
+        assert_eq!(*provider.reads.lock().unwrap(), 0);
+        assert_eq!(
+            provider.key.lock().unwrap().as_ref().unwrap().as_hex(),
+            key.as_hex()
+        );
+        assert_eq!(provider.creates(), 0);
+    }
 
-        assert!(!access.is_encrypted());
+    #[test]
+    fn an_empty_database_stays_plaintext_without_reading_the_key() {
+        let dir = TempDir::new().unwrap();
+        let db = temp_db_path(&dir);
+        fs::write(&db, []).unwrap();
+        let provider = TestKeyProvider::empty();
+        assert!(!bootstrap(&db, &provider, EncryptionPolicy::Plaintext)
+            .unwrap()
+            .is_encrypted());
+        assert_eq!(*provider.reads.lock().unwrap(), 0);
         assert_eq!(provider.creates(), 0);
     }
 
@@ -1437,6 +1477,12 @@ const SCRATCH_DIR_NAME: &str = "scratch";
 /// plaintext copies of synced financial rows. Writing those to the shared system
 /// temp directory reads badly at the best of times and worse once the product
 /// claims encryption at rest.
+/// Private staging under an explicitly selected profile root. Never resolves
+/// the installation-wide DATABASE_URL override.
+pub fn profile_scratch_dir(root: &str) -> Result<std::path::PathBuf> {
+    scratch_dir_beside(&Path::new(root).join("app.db"))
+}
+
 pub fn scratch_dir(app_data_dir: &str) -> Result<std::path::PathBuf> {
     scratch_dir_beside(Path::new(&get_db_path(app_data_dir)))
 }

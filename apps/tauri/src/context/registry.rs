@@ -28,6 +28,13 @@ use super::TauriAiEnvironment;
 use crate::services::ConnectService;
 
 pub struct ServiceContext {
+    pub portfolio_tasks: crate::listeners::PortfolioTasks,
+    pub sync_approvals: crate::commands::device_sync::SyncApprovals,
+    pub sync_lifecycle: tokio::sync::Mutex<()>,
+    pub active: AtomicBool,
+    pub profile_id: uuid::Uuid,
+    pub data_root: std::path::PathBuf,
+    pub secret_store: Arc<dyn wealthfolio_core::secrets::SecretStore>,
     pub base_currency: Arc<RwLock<String>>,
     pub timezone: Arc<RwLock<String>>,
     pub rating_instance_id: Arc<String>,
@@ -276,5 +283,11 @@ impl ServiceContext {
 
     pub fn health_service(&self) -> Arc<health::HealthService> {
         Arc::clone(&self.health_service)
+    }
+}
+
+impl ServiceContext {
+    pub fn is_active(&self) -> bool {
+        self.active.load(std::sync::atomic::Ordering::SeqCst)
     }
 }

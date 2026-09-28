@@ -6,7 +6,7 @@ use crate::{
     main_lib::AppState,
 };
 use axum::{
-    extract::{Path, State},
+    extract::Path,
     http::StatusCode,
     routing::{get, post},
     Json, Router,
@@ -29,21 +29,23 @@ use wealthfolio_core::{
     utils::time_utils::{parse_user_timezone_or_default, user_today},
 };
 
-async fn get_goals(State(state): State<Arc<AppState>>) -> ApiResult<Json<Vec<Goal>>> {
+async fn get_goals(
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
+) -> ApiResult<Json<Vec<Goal>>> {
     let goals = state.goal_service.get_goals()?;
     Ok(Json(goals))
 }
 
 async fn get_goal(
     Path(id): Path<String>,
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
 ) -> ApiResult<Json<Goal>> {
     let goal = state.goal_service.get_goal(&id)?;
     Ok(Json(goal))
 }
 
 async fn create_goal(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(mut goal): Json<NewGoal>,
 ) -> ApiResult<Json<Goal>> {
     goal.currency = Some(state.base_currency.read().unwrap().clone());
@@ -52,7 +54,7 @@ async fn create_goal(
 }
 
 async fn update_goal(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(mut goal): Json<Goal>,
 ) -> ApiResult<Json<Goal>> {
     goal.currency = Some(state.base_currency.read().unwrap().clone());
@@ -62,7 +64,7 @@ async fn update_goal(
 
 async fn delete_goal(
     Path(id): Path<String>,
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
 ) -> ApiResult<StatusCode> {
     let _ = state.goal_service.delete_goal(id).await?;
     Ok(StatusCode::NO_CONTENT)
@@ -70,7 +72,7 @@ async fn delete_goal(
 
 async fn get_goal_funding(
     Path(id): Path<String>,
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
 ) -> ApiResult<Json<Vec<GoalFundingRule>>> {
     let rules = state.goal_service.get_goal_funding(&id)?;
     Ok(Json(rules))
@@ -78,7 +80,7 @@ async fn get_goal_funding(
 
 async fn save_goal_funding(
     Path(id): Path<String>,
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(rules): Json<Vec<GoalFundingRuleInput>>,
 ) -> ApiResult<Json<Vec<GoalFundingRule>>> {
     let result = state.goal_service.save_goal_funding(&id, rules).await?;
@@ -88,14 +90,14 @@ async fn save_goal_funding(
 
 async fn get_goal_plan(
     Path(id): Path<String>,
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
 ) -> ApiResult<Json<Option<GoalPlan>>> {
     let plan = state.goal_service.get_goal_plan(&id)?;
     Ok(Json(plan))
 }
 
 async fn save_goal_plan(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(mut plan): Json<SaveGoalPlan>,
 ) -> ApiResult<Json<GoalPlan>> {
     let goal_id = plan.goal_id.clone();
@@ -142,7 +144,7 @@ fn normalize_plan_currency_to_base(plan: &mut SaveGoalPlan, base_currency: &str)
 
 async fn delete_goal_plan(
     Path(id): Path<String>,
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
 ) -> ApiResult<StatusCode> {
     let _ = state.goal_service.delete_goal_plan(&id).await?;
     Ok(StatusCode::NO_CONTENT)
@@ -150,7 +152,7 @@ async fn delete_goal_plan(
 
 async fn refresh_goal_summary(
     Path(id): Path<String>,
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
 ) -> ApiResult<Json<Goal>> {
     let valuation_map = build_valuation_map(&state).await?;
     let goal = state
@@ -161,7 +163,7 @@ async fn refresh_goal_summary(
 }
 
 async fn refresh_all_goal_summaries(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
 ) -> ApiResult<Json<Vec<Goal>>> {
     let goals = state.goal_service.get_goals()?;
     let valuation_map = build_valuation_map(&state).await?;
@@ -220,7 +222,7 @@ async fn build_valuation_map(state: &AppState) -> ApiResult<HashMap<String, f64>
 
 async fn get_retirement_overview(
     Path(id): Path<String>,
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
 ) -> ApiResult<Json<RetirementOverview>> {
     let valuation_map = build_valuation_map(&state).await?;
     let overview = state
@@ -232,7 +234,7 @@ async fn get_retirement_overview(
 
 async fn get_save_up_overview(
     Path(id): Path<String>,
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
 ) -> ApiResult<Json<SaveUpOverview>> {
     let valuation_map = build_valuation_map(&state).await?;
     let overview = state
@@ -243,7 +245,7 @@ async fn get_save_up_overview(
 }
 
 async fn preview_save_up_overview(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(input): Json<SaveUpInput>,
 ) -> ApiResult<Json<SaveUpOverview>> {
     let as_of = user_today(parse_user_timezone_or_default(
@@ -357,7 +359,7 @@ where
 }
 
 async fn retirement_projection(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(req): Json<RetirementSimulationRequest>,
 ) -> ApiResult<Json<fire::FireProjection>> {
     let as_of = user_today(parse_user_timezone_or_default(
@@ -377,7 +379,7 @@ async fn retirement_projection(
 }
 
 async fn retirement_monte_carlo(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(req): Json<RetirementMonteCarloRequest>,
 ) -> ApiResult<Json<MonteCarloResult>> {
     let as_of = user_today(parse_user_timezone_or_default(
@@ -407,7 +409,7 @@ async fn retirement_monte_carlo(
 }
 
 async fn retirement_stress_tests(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(req): Json<RetirementSimulationRequest>,
 ) -> ApiResult<Json<Vec<StressTestResult>>> {
     let as_of = user_today(parse_user_timezone_or_default(
@@ -430,7 +432,7 @@ async fn retirement_stress_tests(
 }
 
 async fn retirement_scenario_analysis(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(req): Json<RetirementSimulationRequest>,
 ) -> ApiResult<Json<Vec<ScenarioResult>>> {
     let as_of = user_today(parse_user_timezone_or_default(
@@ -453,7 +455,7 @@ async fn retirement_scenario_analysis(
 }
 
 async fn retirement_decision_sensitivity_map(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(req): Json<RetirementDecisionSensitivityMapRequest>,
 ) -> ApiResult<Json<DecisionSensitivityMatrix>> {
     let as_of = user_today(parse_user_timezone_or_default(
@@ -482,7 +484,7 @@ async fn retirement_decision_sensitivity_map(
 }
 
 async fn retirement_sequence_of_returns(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(req): Json<RetirementSorrRequest>,
 ) -> ApiResult<Json<Vec<SorrScenario>>> {
     let as_of = user_today(parse_user_timezone_or_default(
@@ -508,7 +510,7 @@ async fn retirement_sequence_of_returns(
     Ok(Json(result))
 }
 
-pub fn router() -> Router<Arc<AppState>> {
+pub fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
     Router::new()
         .route("/goals", get(get_goals).post(create_goal).put(update_goal))
         .route("/goals/{id}", get(get_goal).delete(delete_goal))

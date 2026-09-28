@@ -266,53 +266,6 @@ pub struct CommitInitializeKeysResponse {
     pub key_state: KeyState,
 }
 
-/// Response from starting key rotation (Phase 1).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RotateKeysResponse {
-    /// Base64 encoded challenge
-    pub challenge: String,
-    /// Base64 encoded nonce
-    pub nonce: String,
-    /// New key version
-    #[serde(alias = "new_key_version")]
-    pub new_key_version: i32,
-}
-
-/// Envelope for a device during key rotation.
-/// Note: Uses snake_case for cloud API serialization.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeviceKeyEnvelope {
-    /// Device ID
-    pub device_id: String,
-    /// Base64 encoded device key envelope
-    pub device_key_envelope: String,
-}
-
-/// Request to commit key rotation (Phase 2).
-/// Note: Uses snake_case for cloud API serialization.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CommitRotateKeysRequest {
-    /// New key version
-    pub new_key_version: i32,
-    /// Envelopes for all devices
-    pub envelopes: Vec<DeviceKeyEnvelope>,
-    /// Base64 encoded signature
-    pub signature: String,
-    /// Base64 encoded challenge response (optional)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub challenge_response: Option<String>,
-}
-
-/// Response from committing key rotation.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CommitRotateKeysResponse {
-    pub success: bool,
-    #[serde(alias = "key_version")]
-    pub key_version: i32,
-}
-
 /// Response from resetting team sync.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -14,7 +14,7 @@ use crate::{
     main_lib::AppState,
 };
 use axum::{
-    extract::{Path, State},
+    extract::Path,
     http::StatusCode,
     routing::{delete, get, post, put},
     Json, Router,
@@ -138,7 +138,7 @@ pub struct UpdateAssetDetailsRequest {
 
 /// POST /alternative-assets - Creates a new alternative asset with initial valuation
 async fn create_alternative_asset(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(request): Json<CreateAlternativeAssetRequest>,
 ) -> ApiResult<Json<CreateAlternativeAssetResponse>> {
     // Parse string values to typed values
@@ -201,7 +201,7 @@ async fn create_alternative_asset(
 /// PUT /alternative-assets/:id/valuation - Updates the valuation of an alternative asset
 async fn update_alternative_asset_valuation(
     Path(asset_id): Path<String>,
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(request): Json<UpdateValuationRequest>,
 ) -> ApiResult<Json<UpdateValuationResponse>> {
     // Parse string values
@@ -248,7 +248,7 @@ async fn update_alternative_asset_valuation(
 /// PUT /alternative-assets/:id/metadata - Updates an alternative asset's details (name, notes, and/or metadata)
 async fn update_alternative_asset_metadata(
     Path(asset_id): Path<String>,
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(request): Json<UpdateAssetDetailsRequest>,
 ) -> ApiResult<StatusCode> {
     // Convert HashMap<String, String> to HashMap<String, Option<String>>
@@ -285,7 +285,7 @@ async fn update_alternative_asset_metadata(
 /// DELETE /alternative-assets/:id - Deletes an alternative asset and related data
 async fn delete_alternative_asset(
     Path(asset_id): Path<String>,
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
 ) -> ApiResult<StatusCode> {
     state
         .alternative_asset_service
@@ -310,7 +310,7 @@ async fn delete_alternative_asset(
 /// POST /alternative-assets/:id/link-liability - Links a liability to a target asset
 async fn link_liability(
     Path(liability_id): Path<String>,
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(request): Json<LinkLiabilityRequest>,
 ) -> ApiResult<StatusCode> {
     let core_request = CoreLinkRequest {
@@ -329,7 +329,7 @@ async fn link_liability(
 /// DELETE /alternative-assets/:id/link-liability - Unlinks a liability from its linked asset
 async fn unlink_liability(
     Path(liability_id): Path<String>,
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
 ) -> ApiResult<StatusCode> {
     state
         .alternative_asset_service
@@ -341,7 +341,7 @@ async fn unlink_liability(
 
 /// GET /alternative-holdings - Gets all alternative holdings (assets with their latest valuations)
 async fn get_alternative_holdings(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
 ) -> ApiResult<Json<Vec<AlternativeHoldingResponse>>> {
     let holdings = state.alternative_asset_service.get_alternative_holdings()?;
 
@@ -385,7 +385,7 @@ async fn get_alternative_holdings(
 // Router
 // ─────────────────────────────────────────────────────────────────────────────
 
-pub fn router() -> Router<Arc<AppState>> {
+pub fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
     Router::new()
         .route("/alternative-assets", post(create_alternative_asset))
         .route(

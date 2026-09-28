@@ -170,6 +170,16 @@ impl FileSecretStore {
 }
 
 impl SecretStore for FileSecretStore {
+    fn list_secrets(&self) -> Result<Vec<String>> {
+        Ok(self
+            .read_store()?
+            .keys()
+            .filter_map(|key| {
+                key.strip_prefix(wealthfolio_core::secrets::SERVICE_PREFIX)
+                    .map(str::to_owned)
+            })
+            .collect())
+    }
     fn set_secret(&self, service: &str, secret: &str) -> Result<()> {
         let key = format_service_id(service);
         self.with_store(|store| {

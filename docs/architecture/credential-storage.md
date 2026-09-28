@@ -8,6 +8,16 @@ rather than browser storage.
 For database keys, portable exports and restore behavior, see
 [database encryption and backups](database-encryption-and-backups.md).
 
+## Profile namespaces
+
+[Profiles](multi-profile-and-app-lock.md) wrap the platform store with a fixed
+`ScopedSecretStore` namespace. New profiles prefix logical keys with
+`profile:<uuid>:`; only the adopted legacy profile keeps existing unprefixed
+keys. This includes add-on fallback keys, profile lock records, and
+Connect/device credentials. Web profiles share one underlying encrypted vault
+instance. Password verification and recovery are described in the profile
+architecture.
+
 ## Native credentials
 
 The Tauri implementation of the shared `SecretStore` contract uses

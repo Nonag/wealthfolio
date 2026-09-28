@@ -10,20 +10,14 @@ import { HoldingType, isAlternativeAssetKind } from "@/lib/constants";
 import { performancePeriodPnl, performanceSummaryReturn } from "@/lib/performance";
 import { QueryKeys } from "@/lib/query-keys";
 import { useSettingsContext } from "@/lib/settings-provider";
-import { TimePeriod } from "@/lib/types";
 import { PortfolioUpdateTrigger } from "@/pages/dashboard/portfolio-update-trigger";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import type { TimePeriod as UITimePeriod } from "@wealthfolio/ui";
-import {
-  GainAmount,
-  GainPercent,
-  getInitialIntervalData,
-  IntervalSelector,
-  usePersistentState,
-} from "@wealthfolio/ui";
+import { GainAmount, GainPercent, getInitialIntervalData, IntervalSelector } from "@wealthfolio/ui";
+import { usePersistentState } from "@/hooks/use-persistent-state";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 import { format } from "date-fns";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { AccountsSummary } from "./accounts-summary";
 import Balance from "./balance";
@@ -77,15 +71,15 @@ export function DashboardContent() {
   const { t } = useTranslation();
   const { settings } = useSettingsContext();
   const todayISO = formatZonedDateKey(new Date(), settings?.timezone);
-  // Use the same persisted state as IntervalSelector for the interval code
-  const [intervalCode] = usePersistentState<UITimePeriod>(INTERVAL_STORAGE_KEY, DEFAULT_INTERVAL);
-
-  const [selectedInterval, setSelectedInterval] = useState<UITimePeriod>(() => intervalCode);
+  const [selectedInterval, setSelectedInterval] = usePersistentState<UITimePeriod>(
+    INTERVAL_STORAGE_KEY,
+    DEFAULT_INTERVAL,
+  );
   const dateRange = useMemo(
     () => getInitialIntervalData(selectedInterval, parseLocalDate(todayISO)).range,
     [selectedInterval, todayISO],
   );
-  const [isAllTime, setIsAllTime] = useState<boolean>(() => intervalCode === "ALL");
+  const isAllTime = selectedInterval === "ALL";
 
   const { holdings: allHoldings, isLoading: isHoldingsLoading } = useHoldings({ type: "all" });
   const {
@@ -169,12 +163,6 @@ export function DashboardContent() {
 
   const isNegative = totalValue < 0;
 
-  // Callback for IntervalSelector
-  const handleIntervalSelect = (code: TimePeriod) => {
-    setSelectedInterval(code);
-    setIsAllTime(code === "ALL");
-  };
-
   return (
     <div className="flex min-h-full flex-col">
       <div className="px-4 pb-1 pt-2 md:px-6 lg:px-8">
@@ -257,11 +245,10 @@ export function DashboardContent() {
             <div className="flex w-full justify-center">
               <IntervalSelector
                 className="pointer-events-auto relative z-20 w-full max-w-screen-sm sm:max-w-screen-md md:max-w-2xl lg:max-w-3xl"
-                onIntervalSelect={handleIntervalSelect}
+                onIntervalSelect={setSelectedInterval}
                 onHaptic={triggerHaptic}
                 isLoading={isValuationHistoryLoading}
-                storageKey={INTERVAL_STORAGE_KEY}
-                defaultValue={DEFAULT_INTERVAL}
+                value={selectedInterval}
               />
             </div>
           )}

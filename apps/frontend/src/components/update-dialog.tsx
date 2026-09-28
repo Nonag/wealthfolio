@@ -20,7 +20,7 @@ import {
 } from "@wealthfolio/ui/components/ui/carousel";
 import { Progress } from "@wealthfolio/ui/components/ui/progress";
 import { toast } from "@wealthfolio/ui/components/ui/use-toast";
-import { usePersistentState } from "@wealthfolio/ui/hooks/use-persistent-state";
+import { usePersistentState } from "@/hooks/use-persistent-state";
 
 interface DismissedUpdate {
   version: string;

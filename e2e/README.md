@@ -45,9 +45,12 @@ restarting the server on every run.
 node scripts/prep-e2e.mjs
 ```
 
-This creates a new timestamped SQLite database (e.g.
-`db/app-testing-20260411T120000Z.db`) and writes its path to `.env.web`. **Run
-this every time** before starting the server — it ensures test isolation.
+This creates a unique timestamped data directory (e.g.
+`db/app-testing-20260411T120000Z-XXXXXX/`) and writes its database, vault, and
+addon paths to `.env.web`. The profile registry and profile databases stay in
+that directory too. **Run this every time** before starting the server —
+changing only the database filename would reuse the previous installation's
+profiles.
 
 #### Step 2 — Start the web app
 
@@ -154,3 +157,26 @@ npx playwright show-report
 # Record a trace for a failing test (trace is saved on retry)
 # Already configured in playwright.config.ts: trace: "on-first-retry"
 ```
+
+## Profile startup and switching
+
+The isolated profile suite uses a disposable installation directory, a generated
+server secret, and the production web build. It starts its own server and does
+not run `prep-e2e.mjs` or rewrite `.env.web`.
+
+Run from the repository root:
+
+```bash
+cargo build -p wealthfolio-server
+pnpm build
+pnpm exec playwright test --config playwright.profiles.config.ts
+```
+
+Rebuild for web if the last frontend build targeted Tauri. Chrome must be
+installed and port 18388 available. The suite exercises profile switching,
+appearance, shared-browser tab routing, and mobile navigation. Native privacy
+covers, OS lifecycle events, and native OAuth require device testing.
+
+See the
+[profile architecture](../docs/architecture/multi-profile-and-app-lock.md) for
+access boundaries and additional release verification requirements.

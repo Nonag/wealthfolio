@@ -1,3 +1,4 @@
+import { revokeProfileSession } from "@/features/profiles/session";
 import { isWeb } from "@/adapters";
 import { setUnauthorizedHandler } from "@/lib/auth-token";
 import {
@@ -205,6 +206,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const logout = useCallback(() => {
+    revokeProfileSession();
     if (isWeb) {
       try {
         window.sessionStorage.setItem(SSO_REDIRECT_GUARD_STORAGE_KEY, "1");

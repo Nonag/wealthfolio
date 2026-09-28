@@ -12,7 +12,8 @@ const serverProxy = enableProxy
   ? {
       "/api": {
         target: apiTarget,
-        changeOrigin: true,
+        // Profile admission validates the browser Origin against the original Host.
+        changeOrigin: false,
       },
       "/docs": {
         target: apiTarget,

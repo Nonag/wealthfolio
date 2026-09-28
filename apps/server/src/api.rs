@@ -83,7 +83,7 @@ pub async fn readyz() -> &'static str {
 pub struct ApiDoc;
 
 // Keep the addon bootstrap hash as well as the application's inline theme script.
-const SERVER_CSP: &str = "default-src 'self'; script-src 'self' 'sha256-slMj4GRDTmxgcSqtC7zLnSIFInhTIO1M3Z6Gs7s7D+k=' 'sha256-s/UhdlprnzFxx+iXOtDj2n/Jk+MSRz1g/1lyBtFatVw=' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline' blob:; img-src 'self' data: blob: https:; font-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' https://wealthfolio.app https://auth.wealthfolio.app https://connect.wealthfolio.app https://connect-staging.wealthfolio.app; frame-src 'none'; child-src 'self' blob: about:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; worker-src 'self' blob:";
+const SERVER_CSP: &str = "default-src 'self'; script-src 'self' 'sha256-OUUXM+aKkYdqwM38Z84FhgHpIYOk/e5Dz9UaAnwYXk8=' 'sha256-s/UhdlprnzFxx+iXOtDj2n/Jk+MSRz1g/1lyBtFatVw=' 'wasm-unsafe-eval' blob:; style-src 'self' 'unsafe-inline' blob:; img-src 'self' data: blob: https:; font-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' https://wealthfolio.app https://auth.wealthfolio.app https://connect.wealthfolio.app https://connect-staging.wealthfolio.app; frame-src 'none'; child-src 'self' blob: about:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; worker-src 'self' blob:";
 const ADDON_SANDBOX_CSP: &str = "default-src 'none'; script-src 'sha256-s/UhdlprnzFxx+iXOtDj2n/Jk+MSRz1g/1lyBtFatVw=' 'wasm-unsafe-eval' blob:; style-src 'unsafe-inline' blob:; img-src data: blob:; font-src data: blob:; media-src data: blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
 
 pub async fn security_headers(request: Request<Body>, next: Next) -> Response {
@@ -134,7 +134,30 @@ pub(crate) fn cors_layer(config: &Config) -> anyhow::Result<CorsLayer> {
 
 #[allow(deprecated)]
 pub fn app_router(state: Arc<AppState>, config: &Config) -> anyhow::Result<Router> {
+    let profiles = crate::profiles::WebProfiles::new(state.clone(), config)?;
+    app_router_with_profiles(
+        profiles,
+        auth::AuthState {
+            auth: state.auth.clone(),
+            oidc: state.oidc.clone(),
+        },
+        config,
+    )
+}
+
+pub async fn app_router_from_config(config: &Config) -> anyhow::Result<Router> {
+    let profiles = crate::profiles::WebProfiles::open(config).await?;
+    let auth = profiles.auth_state();
+    app_router_with_profiles(profiles, auth, config)
+}
+
+fn app_router_with_profiles(
+    profiles: Arc<crate::profiles::WebProfiles>,
+    auth_state: auth::AuthState,
+    config: &Config,
+) -> anyhow::Result<Router> {
     let cors = cors_layer(config)?;
+    profiles.start_connected_profiles();
 
     let openapi = ApiDoc::openapi();
 
@@ -189,26 +212,33 @@ pub fn app_router(state: Arc<AppState>, config: &Config) -> anyhow::Result<Route
         }),
     );
 
-    let protected_api = protected_api.layer(middleware::from_fn_with_state(
-        state.clone(),
-        auth::require_jwt,
-    ));
+    let protected_api = protected_api
+        .layer(middleware::from_fn_with_state(
+            profiles.clone(),
+            crate::profiles::admit,
+        ))
+        .merge(crate::profiles::router(profiles.clone()))
+        .layer(middleware::from_fn_with_state(
+            auth_state.auth.clone(),
+            auth::require_backup_session,
+        ));
 
     let api = Router::new()
         .route("/healthz", get(healthz))
         .route("/readyz", get(readyz))
-        .merge(auth::router(auth::AuthState {
-            auth: state.auth.clone(),
-            oidc: state.oidc.clone(),
-        }))
+        .merge(auth::router(auth_state))
         .merge(protected_api)
-        .with_state(state.clone());
+        .with_state(());
 
     // Timeout wraps only the /api/v1 subtree: /mcp serves long-lived SSE
     // streams that a request timeout would sever.
     let mut router = Router::new()
         .nest("/api/v1", api)
-        .with_state(state.clone())
+        .layer(middleware::from_fn_with_state(
+            profiles.clone(),
+            crate::profiles::instance_logout,
+        ))
+        .with_state(())
         .layer(middleware::from_fn({
             let ordinary_timeout = config.request_timeout;
             move |request: axum::extract::Request, next: middleware::Next| async move {
@@ -227,7 +257,10 @@ pub fn app_router(state: Arc<AppState>, config: &Config) -> anyhow::Result<Route
         }));
 
     if config.mcp_enabled {
-        router = router.merge(crate::mcp::router(state.clone(), config));
+        router = router.route(
+            "/mcp",
+            axum::routing::any(crate::profiles::mcp).with_state(profiles),
+        );
     }
 
     Ok(router
@@ -346,3 +379,6 @@ mod security_header_tests {
         assert!(csp.contains("media-src 'self' data: blob:"));
     }
 }
+
+#[cfg(test)]
+mod connect_admission_tests;

@@ -288,5 +288,16 @@
   },
   "errors": {
     "unknown": "Unbekannter Fehler"
+  },
+  "session": {
+    "restoring": "Connect wird wiederhergestellt…",
+    "unavailable": "Connect ist vorübergehend nicht verfügbar",
+    "localAvailable": "Ihr lokales Portfolio ist verfügbar. Versuchen Sie erneut, eine Verbindung herzustellen."
+  },
+  "rebind": {
+    "title": "Connect-Verbindung dieses Profils ändern?",
+    "description": "Du verbindest ein anderes Konto oder einen anderen Haushalt. Deine lokalen Portfoliodaten bleiben erhalten, aber bestehende Broker-Verknüpfungen und die Einrichtung der Gerätesynchronisierung werden entfernt. Das neue Konto kann diesem Profil Broker-Daten hinzufügen. Richte die Gerätesynchronisierung erneut ein, sobald du bereit bist. Verwende ein neues Profil, wenn du die Daten getrennt halten möchtest.",
+    "cancel": "Abbrechen",
+    "confirm": "Verbindung ändern"
   }
 }
