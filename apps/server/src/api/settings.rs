@@ -11,7 +11,7 @@ use crate::{
     error::ApiResult,
     main_lib::AppState,
 };
-use axum::{extract::State, routing::get, Json, Router};
+use axum::{routing::get, Json, Router};
 use reqwest::StatusCode as HttpStatusCode;
 use semver::Version;
 use serde::Deserialize;
@@ -21,15 +21,22 @@ use wealthfolio_core::{
     settings::{Settings, SettingsServiceTrait, SettingsUpdate},
 };
 
-async fn get_settings(State(state): State<Arc<AppState>>) -> ApiResult<Json<Settings>> {
+async fn get_settings(
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
+) -> ApiResult<Json<Settings>> {
     let s = state.settings_service.get_settings()?;
     Ok(Json(s))
 }
 
 async fn update_settings(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(payload): Json<SettingsUpdate>,
 ) -> ApiResult<Json<Settings>> {
+    let _connect = payload
+        .sync_enabled
+        .map(|_| crate::profiles::connect_guard(&state))
+        .transpose()
+        .map_err(crate::error::ApiError::Forbidden)?;
     let previous_base_currency = state.base_currency.read().unwrap().clone();
     let previous_timezone = state.timezone.read().unwrap().clone();
     state.settings_service.update_settings(&payload).await?;
@@ -82,7 +89,9 @@ async fn update_settings(
     Ok(Json(updated_settings))
 }
 
-async fn is_auto_update_check_enabled(State(state): State<Arc<AppState>>) -> ApiResult<Json<bool>> {
+async fn is_auto_update_check_enabled(
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
+) -> ApiResult<Json<bool>> {
     let enabled = state
         .settings_service
         .is_auto_update_check_enabled()
@@ -100,7 +109,9 @@ struct AppInfoResponse {
     logs_dir: String,
 }
 
-async fn get_app_info(State(state): State<Arc<AppState>>) -> ApiResult<Json<AppInfoResponse>> {
+async fn get_app_info(
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
+) -> ApiResult<Json<AppInfoResponse>> {
     let version = env!("CARGO_PKG_VERSION").to_string();
 
     let db_path = state.db_path.clone();
@@ -264,7 +275,7 @@ async fn check_update(
     Ok(Json(result))
 }
 
-pub fn router() -> Router<Arc<AppState>> {
+pub fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
     Router::new()
         .route("/settings", get(get_settings).put(update_settings))
         .route(

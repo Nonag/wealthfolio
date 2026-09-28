@@ -26,7 +26,8 @@ use crate::schema::{
 };
 use crate::spending::deterministic_ids::preset_rule_deletion_id;
 use crate::sync::broker_activity_patch::{
-    apply_broker_activity_user_patch_tx, BrokerActivityUserPatchApplyOutcome,
+    apply_broker_activity_user_patch_tx, BrokerActivityPatchQueue,
+    BrokerActivityUserPatchApplyOutcome,
 };
 
 use super::model::{
@@ -158,28 +159,10 @@ struct PortfolioAccountForeignKeyContext {
     account_id: String,
 }
 
-const USER_SYNCABLE_ACTIVITIES_FILTER_SQL: &str = "\
-    UPPER(COALESCE(source_system, '')) IN ('MANUAL', 'CSV') \
-    OR ((source_system IS NULL OR TRIM(source_system) = '') \
-        AND (import_run_id IS NULL OR TRIM(import_run_id) = '') \
-        AND (source_record_id IS NULL OR TRIM(source_record_id) = ''))";
-
-const ROWS_WITH_USER_SYNCABLE_ACTIVITY_FILTER_SQL: &str = "\
-    activity_id IN (
-        SELECT id FROM activities
-        WHERE UPPER(COALESCE(source_system, '')) IN ('MANUAL', 'CSV')
-           OR ((source_system IS NULL OR TRIM(source_system) = '')
-               AND (import_run_id IS NULL OR TRIM(import_run_id) = '')
-               AND (source_record_id IS NULL OR TRIM(source_record_id) = ''))
-    )";
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SyncRowFilter {
-    UserSyncableHoldingsSnapshots,
-    UserSyncableSnapshotPositions,
-    ManualQuotes,
-    UserImportRuns,
-    UserSyncableActivities,
+    SnapshotHoldings,
+    SnapshotPositions,
     SyncableSettings,
     UserTaxonomies,
     SyncableTaxonomyCategories,
@@ -190,27 +173,22 @@ enum SyncRowFilter {
     BudgetRolloverSettingsWithExistingDependencies,
     OverwriteRiskAccounts,
     ValidPortfolioAccounts,
-    RowsWithUserSyncableActivity,
+    RowsWithExistingActivity,
 }
 
 impl SyncRowFilter {
     fn sql(self) -> &'static str {
         match self {
-            Self::UserSyncableHoldingsSnapshots => {
-                "account_id IN (SELECT id FROM accounts) AND source IN ('MANUAL_ENTRY', 'CSV_IMPORT')"
+            Self::SnapshotHoldings => {
+                "account_id IN (SELECT id FROM accounts) AND source IN ('MANUAL_ENTRY', 'CSV_IMPORT', 'BROKER_IMPORTED')"
             }
-            Self::UserSyncableSnapshotPositions => {
+            Self::SnapshotPositions => {
                 "snapshot_id IN (
                     SELECT id FROM holdings_snapshots
                     WHERE account_id IN (SELECT id FROM accounts)
-                      AND source IN ('MANUAL_ENTRY', 'CSV_IMPORT')
+                      AND source IN ('MANUAL_ENTRY', 'CSV_IMPORT', 'BROKER_IMPORTED')
                 )"
             }
-            Self::ManualQuotes => "source = 'MANUAL'",
-            Self::UserImportRuns => {
-                "UPPER(run_type) = 'IMPORT' AND UPPER(source_system) IN ('CSV', 'MANUAL')"
-            }
-            Self::UserSyncableActivities => USER_SYNCABLE_ACTIVITIES_FILTER_SQL,
             Self::SyncableSettings => {
                 static FILTER: std::sync::LazyLock<String> = std::sync::LazyLock::new(|| format!("setting_key IN ('spending.enabled', 'spending.account_ids', 'spending.excluded_category_ids', '{}')", INSIGHTS_OVERVIEW_LAYOUT_KEY));
                 FILTER.as_str()
@@ -263,7 +241,7 @@ impl SyncRowFilter {
             Self::ValidPortfolioAccounts => {
                 "account_id IN (SELECT id FROM accounts) AND portfolio_id IN (SELECT id FROM portfolios)"
             }
-            Self::RowsWithUserSyncableActivity => ROWS_WITH_USER_SYNCABLE_ACTIVITY_FILTER_SQL,
+            Self::RowsWithExistingActivity => "activity_id IN (SELECT id FROM activities)",
         }
     }
 }
@@ -640,19 +618,17 @@ fn normalize_outbox_payload(payload: serde_json::Value) -> Result<serde_json::Va
 /// During export: only rows matching the filter are copied to the snapshot.
 /// During restore: only rows matching the filter are deleted before importing snapshot data,
 /// so that unfiltered rows (e.g. system taxonomies) are preserved.
-/// Tables not listed here are exported/restored unfiltered.
+/// Tables not listed here are exported/restored unfiltered. Quotes include every
+/// source so pairing preserves price history. Broker activities and import parents
+/// are included too; incremental broker data sync remains unchanged.
 const SYNC_TABLE_SNAPSHOT_COPY_FILTERS: &[SyncTableFilterSpec] = &[
     SyncTableFilterSpec {
         table: "holdings_snapshots",
-        filter: SyncRowFilter::UserSyncableHoldingsSnapshots,
+        filter: SyncRowFilter::SnapshotHoldings,
     },
     SyncTableFilterSpec {
         table: "snapshot_positions",
-        filter: SyncRowFilter::UserSyncableSnapshotPositions,
-    },
-    SyncTableFilterSpec {
-        table: "quotes",
-        filter: SyncRowFilter::ManualQuotes,
+        filter: SyncRowFilter::SnapshotPositions,
     },
     // Taxonomy rows are all seeded by migrations — no user-created taxonomies yet.
     // Export nothing; the table is in APP_SYNC_TABLES for future custom taxonomy support.
@@ -665,24 +641,13 @@ const SYNC_TABLE_SNAPSHOT_COPY_FILTERS: &[SyncTableFilterSpec] = &[
         table: "taxonomy_categories",
         filter: SyncRowFilter::SyncableTaxonomyCategories,
     },
-    // Only export user-initiated import runs (CSV/manual), matching the outbox policy.
-    SyncTableFilterSpec {
-        table: "import_runs",
-        filter: SyncRowFilter::UserImportRuns,
-    },
-    // Activities: match the outbox policy so broker activities don't reference
-    // filtered-out import_runs (which would cause FK violations on restore).
-    SyncTableFilterSpec {
-        table: "activities",
-        filter: SyncRowFilter::UserSyncableActivities,
-    },
     SyncTableFilterSpec {
         table: "activity_taxonomy_assignments",
-        filter: SyncRowFilter::RowsWithUserSyncableActivity,
+        filter: SyncRowFilter::RowsWithExistingActivity,
     },
     SyncTableFilterSpec {
         table: "spending_activity_events",
-        filter: SyncRowFilter::RowsWithUserSyncableActivity,
+        filter: SyncRowFilter::RowsWithExistingActivity,
     },
     // Only explicitly allowlisted settings participate in sync.
     SyncTableFilterSpec {
@@ -712,15 +677,11 @@ const SYNC_TABLE_SNAPSHOT_COPY_FILTERS: &[SyncTableFilterSpec] = &[
 const SYNC_TABLE_SNAPSHOT_CLEAR_FILTERS: &[SyncTableFilterSpec] = &[
     SyncTableFilterSpec {
         table: "holdings_snapshots",
-        filter: SyncRowFilter::UserSyncableHoldingsSnapshots,
+        filter: SyncRowFilter::SnapshotHoldings,
     },
     SyncTableFilterSpec {
         table: "snapshot_positions",
-        filter: SyncRowFilter::UserSyncableSnapshotPositions,
-    },
-    SyncTableFilterSpec {
-        table: "quotes",
-        filter: SyncRowFilter::ManualQuotes,
+        filter: SyncRowFilter::SnapshotPositions,
     },
     SyncTableFilterSpec {
         table: "taxonomies",
@@ -731,20 +692,12 @@ const SYNC_TABLE_SNAPSHOT_CLEAR_FILTERS: &[SyncTableFilterSpec] = &[
         filter: SyncRowFilter::SyncableTaxonomyCategories,
     },
     SyncTableFilterSpec {
-        table: "import_runs",
-        filter: SyncRowFilter::UserImportRuns,
-    },
-    SyncTableFilterSpec {
-        table: "activities",
-        filter: SyncRowFilter::UserSyncableActivities,
-    },
-    SyncTableFilterSpec {
         table: "activity_taxonomy_assignments",
-        filter: SyncRowFilter::RowsWithUserSyncableActivity,
+        filter: SyncRowFilter::RowsWithExistingActivity,
     },
     SyncTableFilterSpec {
         table: "spending_activity_events",
-        filter: SyncRowFilter::RowsWithUserSyncableActivity,
+        filter: SyncRowFilter::RowsWithExistingActivity,
     },
     SyncTableFilterSpec {
         table: "app_settings",
@@ -1978,6 +1931,7 @@ fn mark_table_incremental_applied_tx(conn: &mut SqliteConnection, table_name: &s
 #[allow(clippy::too_many_arguments)]
 fn apply_remote_event_lww_tx(
     conn: &mut SqliteConnection,
+    pending: &BrokerActivityPatchQueue,
     entity: SyncEntity,
     entity_id_value: String,
     op: SyncOperation,
@@ -2028,6 +1982,7 @@ fn apply_remote_event_lww_tx(
                 SyncOperation::Create | SyncOperation::Update => {
                     match apply_broker_activity_user_patch_tx(
                         conn,
+                        pending,
                         &entity_id_value,
                         &event_id_value,
                         &payload_json,
@@ -2411,9 +2366,24 @@ impl AppSyncRepository {
             .await
     }
 
+    /// Detach broker integration state while retaining accounts and financial rows.
+    /// Only used after an explicitly confirmed Connect identity change.
+    pub async fn clear_connect_binding_state(&self) -> Result<()> {
+        self.reset_sync_session(true).await
+    }
+
     pub async fn reset_local_sync_session(&self) -> Result<()> {
+        self.reset_sync_session(false).await
+    }
+
+    async fn reset_sync_session(&self, detach_connect: bool) -> Result<()> {
         self.writer
             .exec(move |conn| {
+                if detach_connect {
+                    diesel::sql_query("DELETE FROM brokers_sync_state").execute(conn).map_err(StorageError::from)?;
+                    diesel::sql_query("UPDATE accounts SET provider=NULL, provider_account_id=NULL WHERE provider IS NOT NULL OR provider_account_id IS NOT NULL").execute(conn).map_err(StorageError::from)?;
+                    diesel::sql_query("INSERT INTO app_settings(setting_key, setting_value) VALUES ('sync_enabled','false') ON CONFLICT(setting_key) DO UPDATE SET setting_value='false'").execute(conn).map_err(StorageError::from)?;
+                }
                 let now = Utc::now().to_rfc3339();
 
                 diesel::delete(sync_outbox::table)
@@ -2732,10 +2702,12 @@ impl AppSyncRepository {
         seq_value: i64,
         payload_json: serde_json::Value,
     ) -> Result<bool> {
+        let sync_state = self.writer.sync_state();
         self.writer
             .exec(move |conn| {
                 apply_remote_event_lww_tx(
                     conn,
+                    &sync_state.broker_activity_patches,
                     entity,
                     entity_id_value.clone(),
                     op,
@@ -2774,6 +2746,7 @@ impl AppSyncRepository {
             return Ok(0);
         }
 
+        let sync_state = self.writer.sync_state();
         self.writer
             .exec(move |conn| {
                 // Defer FK checks during batch replay — events may arrive
@@ -2801,6 +2774,7 @@ impl AppSyncRepository {
                     {
                         if apply_remote_event_lww_tx(
                             conn,
+                            &sync_state.broker_activity_patches,
                             entity,
                             entity_id.clone(),
                             op,
@@ -3519,7 +3493,6 @@ mod tests {
     };
     use crate::sync::broker_activity_patch::{
         broker_activity_identity, broker_activity_user_patch_entity_id,
-        clear_pending_broker_activity_user_patches,
     };
     use wealthfolio_core::accounts::account_types;
     use wealthfolio_core::activities::{ActivityRepositoryTrait, ActivityUpsert};
@@ -3733,7 +3706,7 @@ mod tests {
 
     #[tokio::test]
     async fn broker_activity_user_patch_updates_only_overlay_fields() {
-        let (pool, _writer) = setup_db();
+        let (pool, writer) = setup_db();
         let mut conn = get_connection(&pool).expect("conn");
 
         diesel::sql_query(
@@ -3786,6 +3759,7 @@ mod tests {
 
         let applied = apply_remote_event_lww_tx(
             &mut conn,
+            &writer.sync_state().broker_activity_patches,
             SyncEntity::BrokerActivityUserPatch,
             entity_id,
             SyncOperation::Update,
@@ -3850,7 +3824,6 @@ mod tests {
 
     #[tokio::test]
     async fn broker_activity_user_patch_missing_target_defers_until_broker_import() {
-        clear_pending_broker_activity_user_patches();
         let (pool, writer) = setup_db();
         let mut conn = get_connection(&pool).expect("conn");
 
@@ -3876,6 +3849,7 @@ mod tests {
 
         let applied = apply_remote_event_lww_tx(
             &mut conn,
+            &writer.sync_state().broker_activity_patches,
             SyncEntity::BrokerActivityUserPatch,
             entity_id.clone(),
             SyncOperation::Update,
@@ -3988,7 +3962,6 @@ mod tests {
             .get_result(&mut conn)
             .expect("applied event count after replay");
         assert_eq!(applied_event_count, 1);
-        clear_pending_broker_activity_user_patches();
     }
 
     fn insert_goal_for_test(conn: &mut SqliteConnection, goal_id: &str) -> Result<()> {
@@ -6070,6 +6043,56 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn connect_rebind_detaches_brokers_and_preserves_financial_accounts() {
+        let (pool, writer) = setup_db();
+        let repo = AppSyncRepository::new(pool.clone(), writer);
+        {
+            let mut conn = get_connection(&pool).unwrap();
+            insert_account_for_test(&mut conn, "keep").unwrap();
+            diesel::sql_query("UPDATE accounts SET provider='SNAPTRADE', provider_account_id='old-cloud-account' WHERE id='keep'").execute(&mut conn).unwrap();
+        }
+        {
+            let mut conn = get_connection(&pool).unwrap();
+            diesel::sql_query("CREATE TRIGGER fail_rebind BEFORE INSERT ON sync_cursor BEGIN SELECT RAISE(ABORT, 'test cleanup failure'); END").execute(&mut conn).unwrap();
+        }
+        assert!(repo.clear_connect_binding_state().await.is_err());
+        {
+            let mut conn = get_connection(&pool).unwrap();
+            use crate::schema::accounts;
+            let provider: Option<String> = accounts::table
+                .select(accounts::provider)
+                .filter(accounts::id.eq("keep"))
+                .first(&mut conn)
+                .unwrap();
+            assert_eq!(provider.as_deref(), Some("SNAPTRADE"));
+            diesel::sql_query("DROP TRIGGER fail_rebind")
+                .execute(&mut conn)
+                .unwrap();
+        }
+        repo.clear_connect_binding_state().await.unwrap();
+        let mut conn = get_connection(&pool).unwrap();
+        use crate::schema::accounts;
+        let (id, provider, provider_id): (String, Option<String>, Option<String>) = accounts::table
+            .select((
+                accounts::id,
+                accounts::provider,
+                accounts::provider_account_id,
+            ))
+            .filter(accounts::id.eq("keep"))
+            .first(&mut conn)
+            .unwrap();
+        assert_eq!(id, "keep");
+        assert_eq!((provider, provider_id), (None, None));
+        assert_eq!(
+            sync_outbox::table
+                .count()
+                .get_result::<i64>(&mut conn)
+                .unwrap(),
+            0
+        );
+    }
+
+    #[tokio::test]
     async fn reset_local_sync_session_clears_control_plane_and_zeroes_cursors() {
         let (pool, writer) = setup_db();
         let repo = AppSyncRepository::new(pool.clone(), writer);
@@ -7117,7 +7140,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn snapshot_export_filters_broker_snapshots_and_manual_quotes() {
+    async fn snapshot_round_trip_preserves_quotes_and_broker_holdings() {
         #[derive(diesel::QueryableByName)]
         struct CountRow {
             #[diesel(sql_type = diesel::sql_types::BigInt)]
@@ -7157,9 +7180,19 @@ mod tests {
         .execute(&mut conn)
         .expect("insert quotes");
 
+        conn.batch_execute(
+            "UPDATE holdings_snapshots SET cash_balances = '{\"USD\":\"125\"}', cash_total_account_currency = '125', cash_total_base_currency = '125'
+             WHERE source = 'BROKER_IMPORTED';
+             INSERT INTO snapshot_positions (snapshot_id, asset_id, quantity, average_cost, total_cost_basis, currency, inception_date, is_alternative, contract_multiplier, created_at, last_updated)
+             VALUES ('22222222-2222-4222-8222-222222222222', 'asset-export-filter', '3', '10', '30', 'USD', '2026-01-01T00:00:00Z', 0, '1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+        ).expect("insert retained broker position and cash");
+
         let payload = repo
             .export_snapshot_sqlite_image(vec![
+                "accounts".to_string(),
+                "assets".to_string(),
                 "holdings_snapshots".to_string(),
+                "snapshot_positions".to_string(),
                 "quotes".to_string(),
             ])
             .await
@@ -7177,8 +7210,8 @@ mod tests {
                 .get_result(&mut exported_conn)
                 .expect("count snapshot rows");
         assert_eq!(
-            snapshot_count.c, 1,
-            "manual snapshots should export; broker snapshots stay local"
+            snapshot_count.c, 2,
+            "manual and broker snapshots should export; calculated rows stay local"
         );
 
         let broker_count: CountRow = diesel::sql_query(
@@ -7186,7 +7219,7 @@ mod tests {
         )
         .get_result(&mut exported_conn)
         .expect("count broker snapshots");
-        assert_eq!(broker_count.c, 0, "broker snapshots should not export");
+        assert_eq!(broker_count.c, 1, "retained broker snapshots should export");
 
         let calculated_count: CountRow = diesel::sql_query(
             "SELECT COUNT(*) AS c FROM holdings_snapshots WHERE source = 'CALCULATED'",
@@ -7201,16 +7234,94 @@ mod tests {
         let quote_count: CountRow = diesel::sql_query("SELECT COUNT(*) AS c FROM quotes")
             .get_result(&mut exported_conn)
             .expect("count quote rows");
-        assert_eq!(quote_count.c, 1, "manual quotes only should export");
+        assert_eq!(quote_count.c, 2, "all quotes should export");
 
         let provider_quote_count: CountRow =
             diesel::sql_query("SELECT COUNT(*) AS c FROM quotes WHERE source != 'MANUAL'")
                 .get_result(&mut exported_conn)
                 .expect("count provider quote rows");
-        assert_eq!(
-            provider_quote_count.c, 0,
-            "provider quotes should not export"
-        );
+        assert_eq!(provider_quote_count.c, 1, "provider quotes should export");
+        drop(exported_conn);
+
+        use crate::market_data::QuoteDB;
+        use crate::schema::quotes;
+
+        let expected_quotes = quotes::table
+            .order(quotes::id)
+            .load::<QuoteDB>(&mut conn)
+            .expect("source quotes");
+        let (target_pool, target_writer) = setup_db();
+        let target_repo = AppSyncRepository::new(target_pool.clone(), target_writer);
+        target_repo
+            .restore_snapshot_tables_from_file(
+                exported_path.to_string_lossy().to_string(),
+                vec![
+                    "accounts".to_string(),
+                    "assets".to_string(),
+                    "holdings_snapshots".to_string(),
+                    "snapshot_positions".to_string(),
+                    "quotes".to_string(),
+                ],
+                0,
+                "quote-restore-device".to_string(),
+                Some(1),
+            )
+            .await
+            .expect("restore into fresh database");
+        let mut target_conn = get_connection(&target_pool).expect("target conn");
+        let restored_quotes = quotes::table
+            .order(quotes::id)
+            .load::<QuoteDB>(&mut target_conn)
+            .expect("restored quotes");
+        assert_eq!(restored_quotes, expected_quotes);
+
+        let restored_broker: CountRow = diesel::sql_query(
+            "SELECT COUNT(*) AS c FROM holdings_snapshots h
+             JOIN snapshot_positions p ON p.snapshot_id = h.id
+             JOIN accounts a ON a.id = h.account_id
+             WHERE h.source = 'BROKER_IMPORTED' AND h.cash_total_account_currency = '125'
+               AND p.quantity = '3' AND p.total_cost_basis = '30'
+               AND a.provider_account_id IS NULL",
+        )
+        .get_result(&mut target_conn)
+        .expect("restored disconnected broker data");
+        assert_eq!(restored_broker.c, 1);
+
+        // Restoring over existing provider quotes must replace them without
+        // duplicate-key failures or retaining locally changed prices.
+        diesel::update(quotes::table.filter(quotes::source.eq("YAHOO")))
+            .set(quotes::close.eq("999"))
+            .execute(&mut target_conn)
+            .expect("change target provider quote");
+        drop(target_conn);
+        // Each download is staged in its own file by the restore runtime.
+        let next_snapshot_path = exported_dir.path().join("next-snapshot.db");
+        std::fs::copy(&exported_path, &next_snapshot_path).expect("stage next snapshot");
+        target_repo
+            .restore_snapshot_tables_from_file(
+                next_snapshot_path.to_string_lossy().to_string(),
+                vec!["quotes".to_string()],
+                0,
+                "quote-restore-device".to_string(),
+                Some(1),
+            )
+            .await
+            .expect("restore over existing quotes");
+        let mut target_conn = get_connection(&target_pool).expect("target conn");
+        let restored_quotes = quotes::table
+            .order(quotes::id)
+            .load::<QuoteDB>(&mut target_conn)
+            .expect("replaced quotes");
+        assert_eq!(restored_quotes, expected_quotes);
+
+        // Snapshot inclusion must not expand the incremental quote policy.
+        use crate::sync::SyncOutboxModel;
+        for quote in restored_quotes {
+            assert_eq!(
+                quote.should_sync_outbox(SyncOperation::Update),
+                quote.source == "MANUAL"
+            );
+        }
     }
 
     #[tokio::test]
@@ -7271,7 +7382,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn snapshot_export_filters_activity_sidecars_to_user_syncable_activities() {
+    async fn snapshot_export_preserves_broker_activity_sidecars() {
         #[derive(diesel::QueryableByName)]
         struct CountRow {
             #[diesel(sql_type = diesel::sql_types::BigInt)]
@@ -7348,40 +7459,40 @@ mod tests {
         let activity_count: CountRow = diesel::sql_query("SELECT COUNT(*) AS c FROM activities")
             .get_result(&mut exported_conn)
             .expect("count activities");
-        assert_eq!(activity_count.c, 1);
+        assert_eq!(activity_count.c, 2);
 
         let broker_activity_count: CountRow = diesel::sql_query(
             "SELECT COUNT(*) AS c FROM activities WHERE id = 'broker-activity-sidecar'",
         )
         .get_result(&mut exported_conn)
         .expect("count broker activity");
-        assert_eq!(broker_activity_count.c, 0);
+        assert_eq!(broker_activity_count.c, 1);
 
         let assignment_count: CountRow =
             diesel::sql_query("SELECT COUNT(*) AS c FROM activity_taxonomy_assignments")
                 .get_result(&mut exported_conn)
                 .expect("count activity assignments");
-        assert_eq!(assignment_count.c, 1);
+        assert_eq!(assignment_count.c, 2);
 
         let broker_assignment_count: CountRow = diesel::sql_query(
             "SELECT COUNT(*) AS c FROM activity_taxonomy_assignments WHERE activity_id = 'broker-activity-sidecar'",
         )
         .get_result(&mut exported_conn)
         .expect("count broker activity assignment");
-        assert_eq!(broker_assignment_count.c, 0);
+        assert_eq!(broker_assignment_count.c, 1);
 
         let event_tag_count: CountRow =
             diesel::sql_query("SELECT COUNT(*) AS c FROM spending_activity_events")
                 .get_result(&mut exported_conn)
                 .expect("count activity event tags");
-        assert_eq!(event_tag_count.c, 1);
+        assert_eq!(event_tag_count.c, 2);
 
         let broker_event_tag_count: CountRow = diesel::sql_query(
             "SELECT COUNT(*) AS c FROM spending_activity_events WHERE activity_id = 'broker-activity-sidecar'",
         )
         .get_result(&mut exported_conn)
         .expect("count broker activity event tag");
-        assert_eq!(broker_event_tag_count.c, 0);
+        assert_eq!(broker_event_tag_count.c, 1);
     }
 
     #[tokio::test]
@@ -7435,7 +7546,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn snapshot_export_keeps_csv_import_parent_and_excludes_broker_rows() {
+    async fn snapshot_round_trip_preserves_csv_and_broker_import_parents() {
         #[derive(diesel::QueryableByName)]
         struct CountRow {
             #[diesel(sql_type = diesel::sql_types::BigInt)]
@@ -7502,12 +7613,12 @@ mod tests {
             diesel::sql_query("SELECT COUNT(*) AS c FROM import_runs")
                 .get_result(&mut exported_conn)
                 .expect("count exported import runs");
-        assert_eq!(exported_run_count.c, 1);
+        assert_eq!(exported_run_count.c, 2);
         let exported_activity_count: CountRow =
             diesel::sql_query("SELECT COUNT(*) AS c FROM activities")
                 .get_result(&mut exported_conn)
                 .expect("count exported activities");
-        assert_eq!(exported_activity_count.c, 1);
+        assert_eq!(exported_activity_count.c, 2);
         let exported_activity: ImportRunIdRow = diesel::sql_query(
             "SELECT import_run_id FROM activities WHERE id = 'activity-csv-imported'",
         )
@@ -7529,7 +7640,7 @@ mod tests {
             acc.c += row.c;
             acc
         });
-        assert_eq!(exported_broker_count.c, 0);
+        assert_eq!(exported_broker_count.c, 2);
         drop(exported_conn);
 
         let (restore_pool, restore_writer) = setup_db();
@@ -7576,7 +7687,7 @@ mod tests {
             acc.c += row.c;
             acc
         });
-        assert_eq!(restored_broker_count.c, 0);
+        assert_eq!(restored_broker_count.c, 2);
     }
 
     #[tokio::test]

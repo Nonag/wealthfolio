@@ -8,16 +8,23 @@ pub fn run_database_restore(
     password: Option<&str>,
     confirmed: bool,
 ) -> anyhow::Result<()> {
+    run_profile_database_restore(path, password, confirmed, None)
+}
+pub fn run_profile_database_restore(
+    path: &Path,
+    password: Option<&str>,
+    confirmed: bool,
+    profile: Option<uuid::Uuid>,
+) -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
     let secret = crate::config::load_secret_key(
         std::env::var_os("WF_SECRET_KEY"),
         std::env::var_os("WF_SECRET_KEY_FILE"),
     )?;
-    let key = Arc::new(DbEncryptionKey::from_bytes(
-        &crate::auth::derive_database_key(&secret),
-    ));
-    let database = std::env::var("WF_DB_PATH")
-        .unwrap_or_else(|_| crate::main_lib::DEFAULT_DB_PATH.to_string());
+    let database = crate::config::database_path_from_env()?;
+    let (database, database_key, _registry) =
+        crate::profiles::offline_database(database, &secret, profile)?;
+    let key = Arc::new(DbEncryptionKey::from_bytes(&database_key));
     let required = std::env::var("WF_DB_REQUIRE_ENCRYPTION")
         .map(|value| {
             matches!(
@@ -50,9 +57,9 @@ pub fn run_database_restore(
         .unwrap_or_else(|| Path::new("."));
     let root = root.to_str().context("Invalid database directory")?;
     // Match the existing offline conversion path and the shared scratch helper.
-    std::env::set_var("DATABASE_URL", &database);
-    let prepared = portable::prepare_import(path, &db::scratch_dir(root)?, password, Some(key))
-        .context("Backup validation failed; the destination database was not replaced")?;
+    let prepared =
+        portable::prepare_import(path, &db::profile_scratch_dir(root)?, password, Some(key))
+            .context("Backup validation failed; the destination database was not replaced")?;
     println!(
         "Validated backup: {} accounts, {} activities. Destination encryption: {}.",
         prepared.summary.account_count,
@@ -72,7 +79,7 @@ pub fn run_database_restore(
         },
         &owner,
     )?;
-    println!("Restore completed. Reconnect Wealthfolio Connect, device sync and custom data providers after starting the server.");
+    println!("Restore completed. Reconnect Wealthfolio Connect and device sync after starting the server.");
     if let Some(backup) = outcome.pre_operation_backup {
         println!("Previous database snapshot: {backup}");
     }

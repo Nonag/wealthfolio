@@ -1,3 +1,4 @@
+import { profileFetch } from "@/features/profiles/session";
 // Web adapter core - Internal invoke function, COMMANDS map, and helpers
 // This module exports invoke, logger, and platform constants for shared modules
 
@@ -303,14 +304,13 @@ export const COMMANDS: CommandMap = {
     method: "POST",
     path: "/sync/pairing/complete-with-transfer",
   },
-  confirm_pairing_with_bootstrap: {
-    method: "POST",
-    path: "/sync/pairing/confirm-with-bootstrap",
-  },
-  begin_pairing_confirm: { method: "POST", path: "/sync/pairing/flow/begin" },
-  get_pairing_flow_state: { method: "POST", path: "/sync/pairing/flow/state" },
-  approve_pairing_overwrite: { method: "POST", path: "/sync/pairing/flow/approve-overwrite" },
-  cancel_pairing_flow: { method: "POST", path: "/sync/pairing/flow/cancel" },
+  // Device Sync - Restore operation (receiving device)
+  device_sync_begin_pairing_restore: { method: "POST", path: "/sync/pairing/begin-restore" },
+  device_sync_get_restore: { method: "GET", path: "/sync/restore" },
+  device_sync_start_restore: { method: "POST", path: "/sync/restore/start" },
+  device_sync_approve_restore: { method: "POST", path: "/sync/restore/approve" },
+  device_sync_retry_restore: { method: "POST", path: "/sync/restore/retry" },
+  device_sync_cancel_restore: { method: "POST", path: "/sync/restore/cancel" },
   // Wealthfolio Connect (Broker Sync)
   store_sync_session: { method: "POST", path: "/connect/session" },
   post_login_bootstrap: { method: "POST", path: "/connect/post-login-bootstrap" },
@@ -345,18 +345,6 @@ export const COMMANDS: CommandMap = {
   device_sync_pairing_source_status: {
     method: "GET",
     path: "/connect/device/pairing-source-status",
-  },
-  device_sync_bootstrap_overwrite_check: {
-    method: "GET",
-    path: "/connect/device/bootstrap-overwrite-check",
-  },
-  device_sync_reconcile_ready_state: {
-    method: "POST",
-    path: "/connect/device/reconcile-ready-state",
-  },
-  device_sync_bootstrap_snapshot_if_needed: {
-    method: "POST",
-    path: "/connect/device/bootstrap-snapshot",
   },
   device_sync_trigger_cycle: { method: "POST", path: "/connect/device/trigger-cycle" },
   device_sync_start_background_engine: {
@@ -1773,27 +1761,21 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
       body = JSON.stringify(payload);
       break;
     }
-    case "confirm_pairing_with_bootstrap": {
+    case "device_sync_begin_pairing_restore":
+    case "device_sync_start_restore":
+    case "device_sync_approve_restore":
+    case "device_sync_retry_restore":
+    case "device_sync_cancel_restore": {
       body = JSON.stringify(payload);
-      break;
-    }
-    case "begin_pairing_confirm":
-    case "get_pairing_flow_state":
-    case "approve_pairing_overwrite":
-    case "cancel_pairing_flow": {
-      body = JSON.stringify(payload);
-      break;
-    }
-    case "device_sync_reconcile_ready_state": {
-      body = JSON.stringify(payload ?? {});
       break;
     }
     // Wealthfolio Connect commands
     case "store_sync_session": {
-      const { refreshToken } = payload as {
+      const { refreshToken, confirmRebind } = payload as {
         refreshToken: string;
+        confirmRebind?: boolean;
       };
-      body = JSON.stringify({ refreshToken });
+      body = JSON.stringify({ refreshToken, confirmRebind });
       break;
     }
     case "list_devices":
@@ -2136,7 +2118,7 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
     }
   }
 
-  const res = await fetch(url, {
+  const res = await profileFetch(url, {
     method,
     headers,
     body,

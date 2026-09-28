@@ -1,6 +1,8 @@
+import { ConnectSessionUnavailable } from "../components/connect-session-unavailable";
 import { openUrlInBrowser, syncTriggerCycle } from "@/adapters";
 import { Page, PageContent, PageHeader } from "@/components/page";
 import { useDevices, useSyncStatus } from "@/features/devices-sync/hooks";
+import { SyncStates } from "@/features/devices-sync/types";
 import { PortalLink } from "../components/portal-link";
 import { ConnectedView } from "../components/connected-view";
 import { ConnectEmptyState } from "@/features/wealthfolio-connect/components/connect-empty-state";
@@ -52,12 +54,18 @@ export default function ConnectPage() {
   const localizationSettings = useLocalizationSettings();
 
   const { t } = useTranslation();
-  const { isEnabled, isConnected, isInitializing, userInfo } = useWealthfolioConnect();
+  const { isEnabled, isConnected, isInitializing, isSessionUnavailable, userInfo } =
+    useWealthfolioConnect();
   const { status, lastSyncTime, syncStates } = useAggregatedSyncStatus();
   const showBrokerSync = hasBrokerSync(userInfo);
   const { data: brokerAccounts = [] } = useBrokerAccounts({ enabled: showBrokerSync });
   const { mutate: syncBrokerData, isPending: isSyncing } = useSyncBrokerData();
-  const { engineStatus: deviceSyncEngineStatus } = useSyncStatus();
+  const deviceSyncStatus = useSyncStatus();
+  const showConnectDeviceAction =
+    !deviceSyncStatus.isLoading &&
+    !deviceSyncStatus.error &&
+    (deviceSyncStatus.syncState !== SyncStates.READY ||
+      deviceSyncStatus.device?.trustState === "untrusted");
   const { data: devices } = useDevices("my");
   const queryClient = useQueryClient();
   const [isTriggeringDeviceSync, setIsTriggeringDeviceSync] = useState(false);
@@ -222,7 +230,13 @@ export default function ConnectPage() {
       <Page>
         <PageHeader heading={t("connect:page.title")} />
         <PageContent>
-          {isEnabled && isConnected ? <ConnectedView /> : <ConnectEmptyState />}
+          {isSessionUnavailable ? (
+            <ConnectSessionUnavailable />
+          ) : isEnabled && isConnected ? (
+            <ConnectedView />
+          ) : (
+            <ConnectEmptyState />
+          )}
         </PageContent>
       </Page>
     );
@@ -379,7 +393,7 @@ export default function ConnectPage() {
                       <Icons.Smartphone className="text-muted-foreground h-3.5 w-3.5" />
                     </div>
                     {t("connect:page.devices")}
-                    <DeviceSyncStatusBadge engineStatus={deviceSyncEngineStatus} />
+                    <DeviceSyncStatusBadge engineStatus={deviceSyncStatus.engineStatus} />
                   </div>
                   <div className="flex items-center gap-1">
                     <PortalLink
@@ -408,6 +422,19 @@ export default function ConnectPage() {
                       <DeviceItem key={device.id} device={device} />
                     ))}
                   </div>
+                )}
+                {showConnectDeviceAction && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground mt-3 h-auto min-h-11 max-w-full whitespace-normal sm:min-h-9"
+                    asChild
+                  >
+                    <Link to="/settings/connect">
+                      <Icons.Link className="mr-2 h-4 w-4 shrink-0" />
+                      {t("sync:connect.connectThisDevice")}
+                    </Link>
+                  </Button>
                 )}
               </CardContent>
             </Card>

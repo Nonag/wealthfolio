@@ -305,5 +305,16 @@
   },
   "errors": {
     "unknown": "Erro desconhecido"
+  },
+  "session": {
+    "restoring": "A restaurar o Connect…",
+    "unavailable": "O Connect está temporariamente indisponível",
+    "localAvailable": "A sua carteira local está disponível. Tente ligar novamente."
+  },
+  "rebind": {
+    "title": "Alterar a conexão do Connect deste perfil?",
+    "description": "Você está conectando outra conta ou grupo familiar. Os dados locais da sua carteira serão mantidos, mas os vínculos existentes com corretoras e a configuração de sincronização dos dispositivos serão removidos. A nova conta poderá adicionar dados de corretoras a este perfil. Configure novamente a sincronização dos dispositivos quando quiser. Use um novo perfil se preferir manter os dados separados.",
+    "cancel": "Cancelar",
+    "confirm": "Alterar conexão"
   }
 }

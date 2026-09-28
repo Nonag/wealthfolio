@@ -1,9 +1,6 @@
 use std::sync::Arc;
 
-use axum::{
-    extract::{Query, State},
-    Json,
-};
+use axum::{extract::Query, Json};
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use wealthfolio_core::portfolios::{AccountScope, ResolvedAccountScope};
@@ -89,7 +86,7 @@ fn resolve_current_valuation_scope(
 }
 
 pub async fn get_holdings(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(body): Json<FilterBody>,
 ) -> ApiResult<Json<Vec<Holding>>> {
     let holdings =
@@ -98,7 +95,7 @@ pub async fn get_holdings(
 }
 
 pub async fn get_holdings_list(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(body): Json<FilterBody>,
 ) -> ApiResult<Json<Vec<HoldingListItem>>> {
     let holdings =
@@ -139,7 +136,7 @@ async fn load_holdings_for_filter(
 
 /// GET /holdings?accountId=... — simple single-account scope
 pub async fn get_holdings_for_account(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Query(q): Query<AccountIdQuery>,
 ) -> ApiResult<Json<Vec<Holding>>> {
     let base = state.base_currency.read().unwrap().clone();
@@ -156,7 +153,7 @@ pub async fn get_holdings_for_account(
 
 /// GET /holdings/list?accountId=... — single-account lightweight list scope
 pub async fn get_holdings_list_for_account(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Query(q): Query<AccountIdQuery>,
 ) -> ApiResult<Json<Vec<HoldingListItem>>> {
     let base = state.base_currency.read().unwrap().clone();
@@ -175,7 +172,7 @@ pub async fn get_holdings_list_for_account(
 
 /// GET /allocations?accountId=... — simple single-account scope
 pub async fn get_allocations_for_account(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Query(q): Query<AccountIdQuery>,
 ) -> ApiResult<Json<PortfolioAllocations>> {
     let base = state.base_currency.read().unwrap().clone();
@@ -193,7 +190,7 @@ pub async fn get_allocations_for_account(
 
 /// GET /allocations/holdings?accountId=...&taxonomyId=...&categoryId=... — simple single-account scope
 pub async fn get_holdings_by_allocation_for_account(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Query(q): Query<AllocationHoldingsQuery>,
 ) -> ApiResult<Json<AllocationHoldings>> {
     let base = state.base_currency.read().unwrap().clone();
@@ -219,7 +216,7 @@ pub async fn get_holdings_by_allocation_for_account(
 }
 
 pub async fn get_holding(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Query(q): Query<HoldingItemQuery>,
 ) -> ApiResult<Json<Option<Holding>>> {
     let base = state.base_currency.read().unwrap().clone();
@@ -231,7 +228,7 @@ pub async fn get_holding(
 }
 
 pub async fn get_asset_holdings(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Query(q): Query<AssetHoldingsQuery>,
 ) -> ApiResult<Json<Vec<Holding>>> {
     let base = state.base_currency.read().unwrap().clone();
@@ -254,7 +251,7 @@ pub async fn get_asset_holdings(
 }
 
 pub async fn get_asset_lots(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Query(q): Query<AssetLotsQuery>,
 ) -> ApiResult<Json<Vec<AssetLotView>>> {
     let rows = state
@@ -265,7 +262,7 @@ pub async fn get_asset_lots(
 }
 
 pub async fn get_historical_valuations(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Query(q): Query<HistoryQuery>,
 ) -> ApiResult<Json<Vec<DailyAccountValuation>>> {
     let start = q
@@ -293,7 +290,7 @@ pub async fn get_historical_valuations(
 }
 
 pub async fn get_historical_valuations_for_scope(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(body): Json<HistoryFilterBody>,
 ) -> ApiResult<Json<Vec<DailyAccountValuation>>> {
     let start = body
@@ -333,7 +330,7 @@ pub async fn get_historical_valuations_for_scope(
 }
 
 pub async fn get_latest_valuations(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     raw: axum::extract::RawQuery,
 ) -> ApiResult<Json<Vec<DailyAccountValuation>>> {
     use wealthfolio_core::accounts::AccountServiceTrait;
@@ -367,7 +364,7 @@ pub async fn get_latest_valuations(
 }
 
 pub async fn get_current_valuation(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(body): Json<CurrentValuationBody>,
 ) -> ApiResult<Json<CurrentValuationResponse>> {
     let base_currency = state.base_currency.read().unwrap().clone();
@@ -394,7 +391,7 @@ pub async fn get_current_valuation(
 }
 
 pub async fn get_portfolio_allocations(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(body): Json<FilterBody>,
 ) -> ApiResult<Json<PortfolioAllocations>> {
     let base = state.base_currency.read().unwrap().clone();
@@ -415,7 +412,7 @@ pub async fn get_portfolio_allocations(
 }
 
 pub async fn get_holdings_by_allocation(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(body): Json<AllocationFilterBody>,
 ) -> ApiResult<Json<AllocationHoldings>> {
     let base = state.base_currency.read().unwrap().clone();
@@ -449,7 +446,7 @@ pub async fn get_holdings_by_allocation(
 /// Gets snapshots for an account (all sources: CALCULATED, MANUAL_ENTRY, etc.)
 /// Optionally filtered by date range.
 pub async fn get_snapshots(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Query(q): Query<SnapshotsQuery>,
 ) -> ApiResult<Json<Vec<SnapshotInfo>>> {
     let start_date = parse_date_optional(q.date_from, "dateFrom")?;
@@ -477,7 +474,7 @@ pub async fn get_snapshots(
 }
 
 pub async fn get_snapshot_by_date(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Query(q): Query<SnapshotDateQuery>,
 ) -> ApiResult<Json<Vec<Holding>>> {
     let target_date = parse_date(&q.date, "date")?;
@@ -505,7 +502,7 @@ pub async fn get_snapshot_by_date(
 }
 
 pub async fn delete_snapshot_handler(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Query(q): Query<DeleteSnapshotQuery>,
 ) -> ApiResult<axum::http::StatusCode> {
     // Read raw metadata so a malformed stored date remains deletable by ID.
@@ -607,7 +604,7 @@ pub async fn delete_snapshot_handler(
 }
 
 pub async fn save_manual_holdings_handler(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(req): Json<SaveManualHoldingsRequest>,
 ) -> ApiResult<axum::http::StatusCode> {
     tracing::debug!(
@@ -704,7 +701,7 @@ pub async fn save_manual_holdings_handler(
 }
 
 pub async fn check_holdings_import_handler(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(req): Json<CheckHoldingsImportRequest>,
 ) -> ApiResult<Json<CheckHoldingsImportResult>> {
     tracing::debug!(
@@ -779,7 +776,7 @@ pub async fn check_holdings_import_handler(
 }
 
 pub async fn import_holdings_csv_handler(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(req): Json<ImportHoldingsCsvRequest>,
 ) -> ApiResult<Json<ImportHoldingsCsvResult>> {
     tracing::info!(

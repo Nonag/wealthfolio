@@ -1,7 +1,6 @@
 use super::ai_environment::TauriAiEnvironment;
 use super::registry::ServiceContext;
 use crate::domain_events::TauriDomainEventSink;
-use crate::secret_store::shared_secret_store;
 use crate::services::ConnectService;
 use log::{error, warn};
 use std::sync::{Arc, RwLock};
@@ -10,6 +9,7 @@ use wealthfolio_ai::{AiProviderService, ChatConfig, ChatService};
 use wealthfolio_connect::{
     BrokerSyncService, CoreImportRunRepositoryAdapter, ImportRunRepositoryTrait,
 };
+use wealthfolio_core::secrets::SecretStore;
 use wealthfolio_core::{
     accounts::AccountService,
     activities::{rebuild_pending_final_cash_accounts, run_final_cash_migration, ActivityService},
@@ -37,6 +37,7 @@ use wealthfolio_core::{
     taxonomies::TaxonomyService,
 };
 use wealthfolio_device_sync::{engine::DeviceSyncRuntimeState, DeviceEnrollService};
+use wealthfolio_storage_sqlite::sync::ProfileSyncState;
 use wealthfolio_storage_sqlite::{
     accounts::AccountRepository,
     activities::ActivityRepository,
@@ -81,6 +82,9 @@ pub async fn initialize_context(
     app_data_dir: &str,
     access: &db::DbAccess,
     owner: Arc<db::DatabaseOwner>,
+    profile_id: uuid::Uuid,
+    secret_store: Arc<dyn SecretStore>,
+    sync_state: Arc<ProfileSyncState>,
 ) -> Result<ContextInitResult, Box<dyn std::error::Error>> {
     let migration_access = access.clone();
     let migration_owner = owner.clone();
@@ -91,26 +95,30 @@ pub async fn initialize_context(
     .await??;
 
     let pool = access.create_pool_with_owner(owner)?;
-    initialize_with_pool(app_data_dir, pool).await
+    initialize_with_pool(app_data_dir, pool, profile_id, secret_store, sync_state).await
 }
 
 async fn initialize_with_pool(
     app_data_dir: &str,
     pool: Arc<db::DbPool>,
+    profile_id: uuid::Uuid,
+    secret_store: Arc<dyn SecretStore>,
+    sync_state: Arc<ProfileSyncState>,
 ) -> Result<ContextInitResult, Box<dyn std::error::Error>> {
     let (sync_outbox_wake_sender, sync_outbox_wake_receiver) = mpsc::channel(128);
-    let (writer, writer_task) = write_actor::spawn_writer_with_outbox_observer(
+    let (writer, writer_task) = write_actor::spawn_writer_with_sync_state(
         pool.as_ref().clone(),
         Arc::new(move || {
             let _ = sync_outbox_wake_sender.try_send(());
         }),
+        sync_state,
     )
     .map_err(|e| {
         error!("Failed to initialize writer actor: {}", e);
         e
     })?;
 
-    let built = build_context(app_data_dir, pool, writer.clone())
+    let built = build_context(app_data_dir, pool, writer.clone(), profile_id, secret_store)
         .await
         .map_err(|error| error.to_string());
     match built {
@@ -142,6 +150,8 @@ async fn build_context(
     app_data_dir: &str,
     pool: Arc<db::DbPool>,
     writer: WriteHandle,
+    profile_id: uuid::Uuid,
+    secret_store: Arc<dyn SecretStore>,
 ) -> Result<BuiltContext, Box<dyn std::error::Error>> {
     // Instantiate Repositories
     let settings_repository = Arc::new(SettingsRepository::new(pool.clone(), writer.clone()));
@@ -237,8 +247,6 @@ async fn build_context(
             .get_setting_value("instance_id")?
             .ok_or_else(|| std::io::Error::other("Missing internal instance ID"))?,
     );
-
-    let secret_store = shared_secret_store();
 
     // Custom provider repository
     let custom_provider_repository = Arc::new(
@@ -721,6 +729,13 @@ async fn build_context(
 
     Ok(BuiltContext {
         context: ServiceContext {
+            portfolio_tasks: crate::listeners::PortfolioTasks::new(),
+            sync_approvals: Default::default(),
+            sync_lifecycle: tokio::sync::Mutex::new(()),
+            active: std::sync::atomic::AtomicBool::new(true),
+            profile_id,
+            data_root: std::path::PathBuf::from(app_data_dir),
+            secret_store: secret_store.clone(),
             base_currency,
             timezone,
             rating_instance_id,
@@ -808,11 +823,15 @@ mod initialization_tests {
         // both repository ownership and every checked-out connection are gone.
         let probe = pool.as_ref().clone();
         let weak = Arc::downgrade(&pool);
-        assert!(
-            initialize_with_pool(directory.path().to_str().unwrap(), pool)
-                .await
-                .is_err()
-        );
+        assert!(initialize_with_pool(
+            directory.path().to_str().unwrap(),
+            pool,
+            uuid::Uuid::nil(),
+            crate::secret_store::shared_secret_store(crate::data_dir::PRODUCTION_APP_IDENTIFIER),
+            Arc::default(),
+        )
+        .await
+        .is_err());
         assert!(weak.upgrade().is_none());
         let state = probe.state();
         assert_eq!(state.connections, state.idle_connections);

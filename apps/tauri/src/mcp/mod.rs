@@ -175,6 +175,9 @@ pub async fn start_server(app: &AppHandle, ctx: &ServiceContext) -> Result<(), S
 /// Start implementation; callers must hold the `ops` mutex.
 #[cfg(desktop)]
 async fn start_server_locked(app: &AppHandle, ctx: &ServiceContext) -> Result<(), String> {
+    if !ctx.is_active() {
+        return Err("PROFILE_LOCKED".into());
+    }
     let state = app.state::<McpServerState>();
     let mut guard = state.inner.lock().await;
     if guard.is_some() {

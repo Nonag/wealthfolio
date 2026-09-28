@@ -11,6 +11,10 @@ repository = "https://github.com/wealthfolio/wealthfolio"
 default = []
 
 [dependencies]
+argon2 = { version = "0.5", features = ["std"] }
+fs2 = "0.4"
+subtle = "2"
+zeroize = { workspace = true }
 wealthfolio-http = { workspace = true }
 # Workspace dependencies
 tokio = { workspace = true }

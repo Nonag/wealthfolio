@@ -16,8 +16,8 @@ import {
   useDateFormatting,
   useIsMobile,
   useNumberFormatting,
-  usePersistentState,
 } from "@wealthfolio/ui";
+import { usePersistentState } from "@/hooks/use-persistent-state";
 
 import { CategoryTransactionsSheet } from "../components/reports/category-transactions-sheet";
 import { HeatmapCellSheet } from "../components/reports/heatmap-cell-sheet";

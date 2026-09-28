@@ -6,7 +6,6 @@ use crate::{
     main_lib::AppState,
 };
 use axum::{
-    extract::State,
     http::StatusCode,
     response::sse::{Event as SseEvent, KeepAlive, Sse},
     routing::{get, post},
@@ -17,7 +16,7 @@ use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
 use wealthfolio_core::quotes::{MarketSyncMode, DEFAULT_HISTORY_DAYS};
 
 async fn update_portfolio(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     body: Option<Json<PortfolioRequestBody>>,
 ) -> ApiResult<StatusCode> {
     // Web-mode callers typically omit the body; preserve desktop behavior by defaulting
@@ -32,7 +31,7 @@ async fn update_portfolio(
 }
 
 async fn recalculate_portfolio(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     body: Option<Json<PortfolioRequestBody>>,
 ) -> ApiResult<StatusCode> {
     // In the UI, "recalculate portfolio" is used as "rebuild history", so default to a
@@ -50,7 +49,7 @@ async fn recalculate_portfolio(
 }
 
 async fn stream_events(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
 ) -> Sse<impl Stream<Item = Result<SseEvent, Infallible>>> {
     let receiver = BroadcastStream::new(state.event_bus.subscribe());
     let stream = tokio_stream::StreamExt::filter_map(receiver, |event| match event {
@@ -83,7 +82,7 @@ async fn stream_events(
     )
 }
 
-pub fn router() -> Router<Arc<AppState>> {
+pub fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
     Router::new()
         .route("/portfolio/update", post(update_portfolio))
         .route("/portfolio/recalculate", post(recalculate_portfolio))

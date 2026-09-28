@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::{
     body::Body,
-    extract::{Path, State},
+    extract::Path,
     http::{header, Response, StatusCode},
     response::IntoResponse,
     routing::get,
@@ -110,7 +110,7 @@ async fn build_data_export_content(
 }
 
 async fn export_data_route(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Path((data_type, format)): Path<(String, String)>,
 ) -> ApiResult<Response<Body>> {
     let data_type = ExportDataType::parse(&data_type)?;
@@ -132,7 +132,7 @@ async fn export_data_route(
         .map_err(|e| ApiError::Internal(format!("Failed to build export response: {}", e)))
 }
 
-pub fn router() -> Router<Arc<AppState>> {
+pub fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
     Router::new().route(
         "/utilities/export/{data_type}/{format}",
         get(export_data_route),

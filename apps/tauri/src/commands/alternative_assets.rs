@@ -5,14 +5,12 @@
 //! - String ↔ typed value conversion
 //! - Error formatting for the frontend
 
-use crate::database::DatabaseRuntime;
-
+use crate::profiles::ProfileAccess;
 use chrono::NaiveDate;
 use log::error;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::State;
 
 use wealthfolio_core::assets::{
     AssetKind, CreateAlternativeAssetRequest as CoreCreateRequest,
@@ -198,7 +196,7 @@ pub struct NetWorthHistoryPoint {
 #[tauri::command]
 pub async fn create_alternative_asset(
     request: CreateAlternativeAssetRequest,
-    state: State<'_, DatabaseRuntime>,
+    state: ProfileAccess,
 ) -> Result<CreateAlternativeAssetResponse, String> {
     let context = state.context()?;
     // Parse string values to typed values
@@ -255,7 +253,7 @@ pub async fn create_alternative_asset(
 pub async fn update_alternative_asset_valuation(
     asset_id: String,
     request: UpdateValuationRequest,
-    state: State<'_, DatabaseRuntime>,
+    state: ProfileAccess,
 ) -> Result<UpdateValuationResponse, String> {
     let context = state.context()?;
     // Parse string values
@@ -299,7 +297,7 @@ pub async fn update_alternative_asset_metadata(
     name: Option<String>,
     metadata: std::collections::HashMap<String, String>,
     notes: Option<String>,
-    state: State<'_, DatabaseRuntime>,
+    state: ProfileAccess,
 ) -> Result<(), String> {
     let context = state.context()?;
     // Convert HashMap<String, String> to HashMap<String, Option<String>>
@@ -340,7 +338,7 @@ pub async fn update_alternative_asset_metadata(
 #[tauri::command]
 pub async fn delete_alternative_asset(
     asset_id: String,
-    state: State<'_, DatabaseRuntime>,
+    state: ProfileAccess,
 ) -> Result<(), String> {
     let context = state.context()?;
     context
@@ -358,7 +356,7 @@ pub async fn delete_alternative_asset(
 pub async fn link_liability(
     liability_id: String,
     request: LinkLiabilityRequest,
-    state: State<'_, DatabaseRuntime>,
+    state: ProfileAccess,
 ) -> Result<(), String> {
     let context = state.context()?;
     let core_request = CoreLinkRequest {
@@ -380,10 +378,7 @@ pub async fn link_liability(
 
 /// Unlinks a liability from its linked asset.
 #[tauri::command]
-pub async fn unlink_liability(
-    liability_id: String,
-    state: State<'_, DatabaseRuntime>,
-) -> Result<(), String> {
+pub async fn unlink_liability(liability_id: String, state: ProfileAccess) -> Result<(), String> {
     let context = state.context()?;
     context
         .alternative_asset_service()
@@ -400,7 +395,7 @@ pub async fn unlink_liability(
 /// Gets all alternative holdings (assets with their latest valuations).
 #[tauri::command]
 pub async fn get_alternative_holdings(
-    state: State<'_, DatabaseRuntime>,
+    state: ProfileAccess,
 ) -> Result<Vec<AlternativeHoldingResponse>, String> {
     let context = state.context()?;
     let holdings = context
@@ -448,7 +443,7 @@ pub async fn get_alternative_holdings(
 #[tauri::command]
 pub async fn get_net_worth(
     date: Option<String>,
-    state: State<'_, DatabaseRuntime>,
+    state: ProfileAccess,
 ) -> Result<NetWorthResponse, String> {
     let context = state.context()?;
     let as_of_date = match date {
@@ -505,7 +500,7 @@ pub async fn get_net_worth(
 pub fn get_net_worth_history(
     start_date: String,
     end_date: String,
-    state: State<'_, DatabaseRuntime>,
+    state: ProfileAccess,
 ) -> Result<Vec<NetWorthHistoryPoint>, String> {
     let context = state.context()?;
     let start = NaiveDate::parse_from_str(&start_date, "%Y-%m-%d")

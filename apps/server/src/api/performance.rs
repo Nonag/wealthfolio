@@ -5,7 +5,7 @@ use crate::{
     main_lib::AppState,
 };
 use axum::{
-    extract::{Query, State},
+    extract::Query,
     routing::{get, post},
     Json, Router,
 };
@@ -37,7 +37,7 @@ struct AccountsSimplePerfBody {
 }
 
 async fn calculate_accounts_simple_performance(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(body): Json<AccountsSimplePerfBody>,
 ) -> ApiResult<Json<Vec<SimplePerformanceMetrics>>> {
     let ids: Vec<String> = if let Some(ids) = body.account_ids {
@@ -142,7 +142,7 @@ fn performance_accounts_by_id(
 }
 
 async fn calculate_performance_history(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(body): Json<PerfBody>,
 ) -> ApiResult<Json<PerformanceResult>> {
     let start = parse_date_optional(body.start_date, "startDate")?;
@@ -229,7 +229,7 @@ async fn calculate_performance_history(
 }
 
 async fn calculate_performance_summary(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(body): Json<PerfBody>,
 ) -> ApiResult<Json<PerformanceResult>> {
     let start = parse_date_optional(body.start_date, "startDate")?;
@@ -360,7 +360,7 @@ async fn calculate_performance_summary(
 }
 
 async fn get_performance_summaries(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(body): Json<PerformanceSummariesBody>,
 ) -> ApiResult<Json<HashMap<String, PerformanceResult>>> {
     let start = parse_date_optional(body.start_date, "startDate")?;
@@ -458,7 +458,7 @@ struct IncomeSummaryAccountQuery {
 
 /// GET /income/summary?accountId=... — single-account or all-accounts scope
 async fn get_income_summary_for_account(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Query(q): Query<IncomeSummaryAccountQuery>,
 ) -> ApiResult<Json<Vec<IncomeSummary>>> {
     let account_ids: Vec<String> = if let Some(id) = q.account_id {
@@ -490,7 +490,7 @@ struct IncomeSummaryBody {
 
 /// POST /income/summary/query — typed scope query (all, portfolio, multi-account)
 async fn get_income_summary(
-    State(state): State<Arc<AppState>>,
+    axum::Extension(state): axum::Extension<Arc<AppState>>,
     Json(body): Json<IncomeSummaryBody>,
 ) -> ApiResult<Json<Vec<IncomeSummary>>> {
     let account_ids: Vec<String> = match &body.filter {
@@ -521,7 +521,7 @@ async fn get_income_summary(
     Ok(Json(items))
 }
 
-pub fn router() -> Router<Arc<AppState>> {
+pub fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
     Router::new()
         .route(
             "/performance/accounts/simple",

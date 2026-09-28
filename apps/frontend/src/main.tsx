@@ -1,5 +1,7 @@
 import { isDesktop, getPlatform } from "@/adapters";
 import React from "react";
+import { StartupBoundary } from "@/components/startup-boundary";
+import { StartupScreen } from "@/components/startup-screen";
 import ReactDOM from "react-dom/client";
 import { debugAddonState, isAddonDevModeEnabled } from "./addons/addons-loader";
 import App from "./App";
@@ -36,8 +38,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     {/* Suspense boundary for i18next lazy-loaded translation resources: the auth
         layer reads translations before any route-level boundary, so a top-level
         boundary prevents a cold-load suspend from blanking the app. */}
-    <React.Suspense fallback={null}>
-      <App />
-    </React.Suspense>
+    <StartupBoundary>
+      <React.Suspense fallback={<StartupScreen />}>
+        <App />
+      </React.Suspense>
+    </StartupBoundary>
   </React.StrictMode>,
 );

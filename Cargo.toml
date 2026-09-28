@@ -7,7 +7,7 @@ members = [
 ]
 
 [workspace.package]
-version = "3.9.0"
+version = "3.9.2"
 edition = "2021"
 license = "AGPL-3.0"
 
@@ -16,6 +16,10 @@ unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 all = "warn"
+
+[profile.dev]
+# Keep file/line backtraces without full type and variable debug information.
+debug = "line-tables-only"
 
 [workspace.dependencies]
 # Async runtime
@@ -50,7 +54,7 @@ anyhow = "1"
 uuid = { version = "1", features = ["v4", "v7", "serde"] }
 
 # Numbers
-rust_decimal = { version = "1.39", features = ["maths", "serde-float"] }
+rust_decimal = { version = "1.39", features = ["maths", "serde-float", "serde-with-str"] }
 rust_decimal_macros = "1.39"
 num-traits = "0.2"
 
@@ -84,3 +88,8 @@ wealthfolio-ai = { path = "crates/ai" }
 wealthfolio-spending = { path = "crates/spending" }
 wealthfolio-agent-tools = { path = "crates/agent-tools" }
 wealthfolio-mcp = { path = "crates/wealthfolio-mcp" }
+
+# Tauri 2.x requires tao 0.35; this upstream fix keeps the iOS scene configuration alive.
+# Remove when a Tauri release accepts tao >= 0.36.
+[patch.crates-io]
+tao = { git = "https://github.com/tauri-apps/tao", rev = "f2163508" }

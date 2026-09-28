@@ -288,5 +288,16 @@
   },
   "errors": {
     "unknown": "Unknown error"
+  },
+  "session": {
+    "restoring": "Restoring Connect…",
+    "unavailable": "Connect is temporarily unavailable",
+    "localAvailable": "Your local portfolio is available. Retry to reconnect."
+  },
+  "rebind": {
+    "title": "Change this profile’s Connect connection?",
+    "description": "You are connecting a different account or household. Your local portfolio data will stay, but its existing broker links and device sync setup will be removed. The new account can add broker data to this profile. Set up device sync again when you are ready. Use a new profile if you want to keep the data separate.",
+    "cancel": "Cancel",
+    "confirm": "Change connection"
   }
 }

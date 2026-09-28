@@ -30,7 +30,8 @@ const INITIAL_DELAY_SECS: u64 = 60;
 /// Starts the background broker sync scheduler.
 #[cfg(feature = "connect-sync")]
 pub fn start_broker_sync_scheduler(state: Arc<AppState>) {
-    tokio::spawn(async move {
+    let runtime = state.clone();
+    let worker = tokio::spawn(async move {
         info!("Broker sync scheduler started (4-hour interval)");
 
         // Initial delay before first sync
@@ -41,9 +42,10 @@ pub fn start_broker_sync_scheduler(state: Arc<AppState>) {
 
         loop {
             sync_interval.tick().await;
-            run_scheduled_sync(&state).await;
+            run_scheduled_sync(&runtime).await;
         }
     });
+    state.workers.lock().unwrap().push(worker);
 }
 
 /// Starts the background broker sync scheduler.
@@ -136,7 +138,7 @@ pub fn start_background_workers(state: Arc<AppState>) {
     #[allow(clippy::collapsible_if)]
     if crate::features::device_sync_enabled() {
         let startup_state = state.clone();
-        tokio::spawn(async move {
+        let worker = tokio::spawn(async move {
             match crate::api::connect::mint_access_token(&startup_state).await {
                 Ok(token) => {
                     if startup_state
@@ -173,6 +175,7 @@ pub fn start_background_workers(state: Arc<AppState>) {
                 }
             }
         });
+        state.workers.lock().unwrap().push(worker);
     }
 
     // Start background broker sync scheduler (4-hour interval)
@@ -180,7 +183,7 @@ pub fn start_background_workers(state: Arc<AppState>) {
 
     // Start periodic market data sync (6h interval, 2min initial delay)
     let quote_svc = state.quote_service.clone();
-    tokio::spawn(async move {
+    let worker = tokio::spawn(async move {
         wealthfolio_core::quotes::scheduler::run_periodic_sync(
             quote_svc,
             std::time::Duration::from_secs(120),
@@ -188,6 +191,7 @@ pub fn start_background_workers(state: Arc<AppState>) {
         )
         .await;
     });
+    state.workers.lock().unwrap().push(worker);
 }
 
 #[cfg(all(test, feature = "device-sync"))]

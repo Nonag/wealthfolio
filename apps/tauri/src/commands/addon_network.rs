@@ -1,7 +1,6 @@
-use crate::database::DatabaseRuntime;
+use crate::profiles::ProfileAccess;
 
-use crate::secret_store::KeyringSecretStore;
-use tauri::{AppHandle, State};
+use tauri::AppHandle;
 use wealthfolio_core::addons::network::{
     resolve_addon_network_auth_header, AddonNetworkRequest, AddonNetworkResponse,
 };
@@ -10,13 +9,16 @@ use wealthfolio_core::addons::AddonServiceTrait;
 #[tauri::command]
 pub async fn addon_network_request(
     _app_handle: AppHandle,
-    state: State<'_, DatabaseRuntime>,
+    state: ProfileAccess,
     addon_id: String,
     mut request: AddonNetworkRequest,
 ) -> Result<AddonNetworkResponse, String> {
     let context = state.context()?;
-    let injected_authorization =
-        resolve_addon_network_auth_header(&addon_id, request.auth.as_ref(), &KeyringSecretStore)?;
+    let injected_authorization = resolve_addon_network_auth_header(
+        &addon_id,
+        request.auth.as_ref(),
+        context.secret_store.as_ref(),
+    )?;
     request.injected_authorization = injected_authorization;
     context
         .addon_service

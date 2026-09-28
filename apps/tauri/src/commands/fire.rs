@@ -1,8 +1,7 @@
-use crate::database::DatabaseRuntime;
+use crate::profiles::ProfileAccess;
 use std::sync::Arc;
 
 use rust_decimal::prelude::ToPrimitive;
-use tauri::State;
 
 use crate::context::ServiceContext;
 use wealthfolio_core::goals::validate_retirement_plan;
@@ -144,7 +143,7 @@ pub async fn calculate_retirement_projection(
     current_portfolio: f64,
     goal_id: Option<String>,
     planner_mode: Option<RetirementTimingMode>,
-    state: State<'_, DatabaseRuntime>,
+    state: ProfileAccess,
 ) -> Result<FireProjection, String> {
     let context = state.context()?;
     let as_of = user_today(parse_user_timezone_or_default(&context.get_timezone()));
@@ -173,7 +172,7 @@ pub async fn run_retirement_monte_carlo(
     seed: Option<u64>,
     goal_id: Option<String>,
     planner_mode: Option<RetirementTimingMode>,
-    state: State<'_, DatabaseRuntime>,
+    state: ProfileAccess,
 ) -> Result<MonteCarloResult, String> {
     let context = state.context()?;
     let as_of = user_today(parse_user_timezone_or_default(&context.get_timezone()));
@@ -199,7 +198,7 @@ pub async fn run_retirement_stress_tests(
     current_portfolio: f64,
     goal_id: Option<String>,
     planner_mode: Option<RetirementTimingMode>,
-    state: State<'_, DatabaseRuntime>,
+    state: ProfileAccess,
 ) -> Result<Vec<StressTestResult>, String> {
     let context = state.context()?;
     let as_of = user_today(parse_user_timezone_or_default(&context.get_timezone()));
@@ -224,7 +223,7 @@ pub async fn run_retirement_scenario_analysis(
     current_portfolio: f64,
     goal_id: Option<String>,
     planner_mode: Option<RetirementTimingMode>,
-    state: State<'_, DatabaseRuntime>,
+    state: ProfileAccess,
 ) -> Result<Vec<ScenarioResult>, String> {
     let context = state.context()?;
     let as_of = user_today(parse_user_timezone_or_default(&context.get_timezone()));
@@ -249,7 +248,7 @@ pub async fn run_retirement_sorr(
     portfolio_at_fire: f64,
     retirement_start_age: u32,
     goal_id: Option<String>,
-    state: State<'_, DatabaseRuntime>,
+    state: ProfileAccess,
 ) -> Result<Vec<SorrScenario>, String> {
     let context = state.context()?;
     let as_of = user_today(parse_user_timezone_or_default(&context.get_timezone()));
@@ -274,7 +273,7 @@ pub async fn run_retirement_decision_sensitivity_map(
     map: DecisionSensitivityMap,
     goal_id: Option<String>,
     planner_mode: Option<RetirementTimingMode>,
-    state: State<'_, DatabaseRuntime>,
+    state: ProfileAccess,
 ) -> Result<DecisionSensitivityMatrix, String> {
     let context = state.context()?;
     let as_of = user_today(parse_user_timezone_or_default(&context.get_timezone()));

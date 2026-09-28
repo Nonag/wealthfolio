@@ -1,16 +1,11 @@
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use wealthfolio_core::quotes::MarketSyncMode;
 
 /// Event emitted when core context/services are ready to use.
 pub const APP_READY: &str = "app:ready";
-
-/// Event requesting a portfolio update, which may include market data sync and recalculation.
-pub const PORTFOLIO_TRIGGER_UPDATE: &str = "portfolio:trigger-update";
-
-/// Event requesting a full portfolio recalculation, including market data sync for specified accounts/asset_ids.
-pub const PORTFOLIO_TRIGGER_RECALCULATE: &str = "portfolio:trigger-recalculate";
+pub const DATABASE_STATE_CHANGED: &str = "database-state-changed";
 
 /// Event emitted when the background portfolio recalculation process starts.
 pub const PORTFOLIO_UPDATE_START: &str = "portfolio:update-start";
@@ -109,35 +104,19 @@ impl PortfolioRequestPayloadBuilder {
     }
 }
 
-/// Emits the PORTFOLIO_TRIGGER_UPDATE event for incremental updates.
-pub fn emit_portfolio_trigger_update(handle: &tauri::AppHandle, payload: PortfolioRequestPayload) {
-    handle
-        .emit(PORTFOLIO_TRIGGER_UPDATE, &payload)
-        .unwrap_or_else(|e| {
-            log::error!(
-                "Failed to emit {} event for payload {:?}: {}",
-                PORTFOLIO_TRIGGER_UPDATE,
-                payload,
-                e
-            )
-        });
+pub fn emit_portfolio_trigger_update(
+    handle: &tauri::AppHandle,
+    payload: PortfolioRequestPayload,
+    context: &std::sync::Arc<crate::context::ServiceContext>,
+) {
+    crate::listeners::handle_portfolio_request(handle.clone(), context.clone(), payload, false);
 }
-
-/// Emits the PORTFOLIO_TRIGGER_RECALCULATE event for full recalculations.
 pub fn emit_portfolio_trigger_recalculate(
     handle: &tauri::AppHandle,
     payload: PortfolioRequestPayload,
+    context: &std::sync::Arc<crate::context::ServiceContext>,
 ) {
-    handle
-        .emit(PORTFOLIO_TRIGGER_RECALCULATE, &payload)
-        .unwrap_or_else(|e| {
-            log::error!(
-                "Failed to emit {} event for payload {:?}: {}",
-                PORTFOLIO_TRIGGER_RECALCULATE,
-                payload,
-                e
-            )
-        });
+    crate::listeners::handle_portfolio_request(handle.clone(), context.clone(), payload, true);
 }
 
 /// Emits the APP_READY event once the ServiceContext has been initialized.
@@ -159,3 +138,31 @@ pub const ASSET_ENRICHMENT_PROGRESS: &str = "asset:enrichment-progress";
 // Note: Broker sync events (start/complete/error) are emitted by the orchestrator
 // via TauriProgressReporter in commands/brokers_sync.rs, not by helper functions here.
 // The payload format is SyncResult from wealthfolio_connect.
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProfileEvent<T> {
+    pub scope_id: uuid::Uuid,
+    pub data: T,
+}
+
+pub fn emit_for_profile<T: serde::Serialize + Clone>(
+    handle: &tauri::AppHandle,
+    context: &crate::context::ServiceContext,
+    event: &str,
+    payload: T,
+) -> tauri::Result<()> {
+    let Some(scope_id) = handle
+        .state::<crate::profiles::NativeProfiles>()
+        .event_scope(context)
+    else {
+        return Ok(());
+    };
+    handle.emit(
+        event,
+        ProfileEvent {
+            scope_id,
+            data: payload,
+        },
+    )
+}

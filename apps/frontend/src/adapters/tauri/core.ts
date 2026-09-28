@@ -1,7 +1,8 @@
 // Core utilities for Tauri adapter - internal use only
-import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+import { invoke as rawInvoke } from "@tauri-apps/api/core";
 import { debug, error, info, trace, warn } from "@tauri-apps/plugin-log";
 
+import { profileScope, revokeProfileSession } from "@/features/profiles/session";
 import type { Logger } from "../types";
 
 /**
@@ -57,7 +58,26 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
 };
 
 // Re-export tauriInvoke for cases where we need direct access (e.g., Channel streaming)
-export { tauriInvoke };
+export async function tauriInvoke<T>(
+  command: string,
+  payload?: Record<string, unknown>,
+): Promise<T> {
+  // These commands operate only on the application shell, never portfolio data.
+  if (
+    ["open_external_url", "check_for_updates", "install_app_update", "get_platform"].includes(
+      command,
+    )
+  )
+    return rawInvoke<T>(command, payload);
+  try {
+    const result = await rawInvoke<T>(command, { ...payload, scopeId: profileScope() });
+    profileScope(); // discard a response delivered after local revocation
+    return result;
+  } catch (error) {
+    if (/PROFILE_(LOCKED|STALE)/.test(String(error))) revokeProfileSession();
+    throw error;
+  }
+}
 
 // Platform detection flags for shared modules
 export const isDesktop = true;

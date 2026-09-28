@@ -2708,6 +2708,7 @@ impl ActivityRepositoryTrait for ActivityRepository {
         let activity_rows: Vec<ActivityDB> =
             activities_vec.into_iter().map(ActivityDB::from).collect();
 
+        let sync_state = self.writer.sync_state();
         self.writer
             .exec_tx(move |tx| -> Result<BulkUpsertResult> {
                 // Collect all activity IDs, source identities, and idempotency keys for batch lookup.
@@ -3063,7 +3064,7 @@ impl ActivityRepositoryTrait for ActivityRepository {
                 }
 
                 let pending_patch_count =
-                    apply_pending_broker_activity_user_patches_tx(tx.conn())?;
+                    apply_pending_broker_activity_user_patches_tx(tx.conn(), &sync_state.broker_activity_patches)?;
                 if pending_patch_count > 0 {
                     log::debug!(
                         "Applied {} pending broker activity user patches after bulk upsert",
