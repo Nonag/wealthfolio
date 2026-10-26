@@ -18,9 +18,10 @@ import type {
 } from "@wealthfolio/addon-sdk";
 import { isBaselineCategory } from "@wealthfolio/addon-sdk";
 import { AlertFeedback } from "@wealthfolio/ui";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PermissionCategoriesDisplay } from "./permission-categories-display";
+import { useEffectOnChange } from "@/hooks/use-effect-on-change";
 
 interface PermissionDialogProps {
   open: boolean;
@@ -72,7 +73,7 @@ export function PermissionDialog({
   );
   const canManageNetworkHosts = isViewOnly && canEditNetworkHosts && networkHosts.length > 0;
 
-  useEffect(() => {
+  useEffectOnChange(() => {
     if (open) {
       setApprovedNetworkHosts(defaultApprovedNetworkHosts);
     }
@@ -129,7 +130,7 @@ export function PermissionDialog({
           <DialogDescription>{manifest.description}</DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-1">
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto pe-1">
           {/* Function Count Warning */}
           <div className="pt-8">
             <AlertFeedback variant={getWarningVariantByFunctionCount(totalFunctionCount)}>
@@ -188,28 +189,28 @@ export function PermissionDialog({
             canManageNetworkHosts ? (
               <>
                 <Button variant="outline" onClick={onDeny}>
-                  <Icons.Close className="mr-2 h-4 w-4" />
+                  <Icons.Close className="me-2 h-4 w-4" />
                   {t("settings:common_close")}
                 </Button>
                 <Button onClick={() => onApprove(approvedNetworkHosts)}>
-                  <Icons.Check className="mr-2 h-4 w-4" />
+                  <Icons.Check className="me-2 h-4 w-4" />
                   {t("settings:common_save")}
                 </Button>
               </>
             ) : (
               <Button onClick={() => onApprove(approvedNetworkHosts)}>
-                <Icons.Check className="mr-2 h-4 w-4" />
+                <Icons.Check className="me-2 h-4 w-4" />
                 {t("settings:addon_permission_close")}
               </Button>
             )
           ) : (
             <>
               <Button variant="outline" onClick={onDeny}>
-                <Icons.Close className="mr-2 h-4 w-4" />
+                <Icons.Close className="me-2 h-4 w-4" />
                 {t("settings:addon_permission_deny")}
               </Button>
               <Button onClick={() => onApprove(approvedNetworkHosts)}>
-                <Icons.Check className="mr-2 h-4 w-4" />
+                <Icons.Check className="me-2 h-4 w-4" />
                 {t("settings:addon_permission_approve")}
               </Button>
             </>

@@ -245,7 +245,6 @@
     "asset_type_option": "期权",
     "asset_type_metal": "金属(大宗商品)",
     "asset_type_other": "其他",
-    "select_currency": "选择货币...",
     "select_symbol": "选择代码...",
     "symbol_type_security": "证券",
     "symbol_type_crypto": "加密货币",
@@ -304,6 +303,8 @@
     "screenshot_alt": "截图 {{number}}",
     "downloading_update": "正在下载更新...",
     "installing_update": "正在安装更新...",
+    "update_external_flatpak": "此 Wealthfolio 通过 Flatpak 安装。请使用 Flatpak 或软件中心更新。",
+    "update_external_package_manager": "此安装无法在 Wealthfolio 内更新。请使用安装时的相同方式更新。",
     "update_failed": "更新失败。请重试。",
     "remind_me_later": "稍后提醒我",
     "view_changelog": "查看更新日志",
@@ -496,5 +497,9 @@
       "teamChanged": "您的家庭已更改。请重新连接 Wealthfolio Connect 以继续。",
       "rebind": "请重新连接 Wealthfolio Connect，以确认此个人资料的账户和家庭。"
     }
-  }
+  },
+  "remove": "移除",
+  "remove_item": "移除 {{name}}",
+  "actions_for": "{{name}} 的操作",
+  "settings_for": "{{name}} 设置"
 }

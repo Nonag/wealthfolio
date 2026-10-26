@@ -1,7 +1,9 @@
+import { cn } from "@/lib/utils";
 import { useTranslation } from "react-i18next";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { useBackNavigation } from "@/pages/layouts/mobile-stack/use-mobile-stack";
 
-import { Button, Icons } from "@wealthfolio/ui";
+import { Button, Icons, buttonVariants } from "@wealthfolio/ui";
 
 import { useSpendingSettings } from "@/features/spending/hooks/use-spending-settings";
 
@@ -15,7 +17,7 @@ import { RulesOverviewCard } from "./components/rules-overview-card";
 export default function SpendingSettingsPage() {
   const { t } = useTranslation();
   const { isEnabled } = useSpendingSettings();
-  const navigate = useNavigate();
+  const goBack = useBackNavigation("/settings");
 
   return (
     <div className="text-sm leading-relaxed antialiased [&>*+*]:mt-9 [&>section+section]:mt-11">
@@ -24,11 +26,11 @@ export default function SpendingSettingsPage() {
           type="button"
           variant="ghost"
           size="sm"
-          onClick={() => navigate("/settings")}
-          className="text-muted-foreground hover:text-foreground -ml-1 h-8 w-8 shrink-0 p-0 lg:hidden"
+          onClick={goBack}
+          className="text-muted-foreground hover:text-foreground -ms-1 h-8 w-8 shrink-0 p-0 lg:hidden"
           aria-label={t("settings:spending.back_to_settings")}
         >
-          <Icons.ArrowLeft className="h-5 w-5" />
+          <Icons.ArrowLeft className="h-5 w-5 rtl:rotate-180" />
         </Button>
         <div className="min-w-0 flex-1">
           <nav
@@ -69,9 +71,15 @@ export default function SpendingSettingsPage() {
                 <Icons.Upload className="text-muted-foreground h-3.5 w-3.5" aria-hidden />
                 <span className="text-foreground/90">{t("settings:spending.import_prompt")}</span>
               </div>
-              <Button asChild variant="outline" size="sm" className="h-7 shrink-0 text-xs">
-                <Link to="/import">{t("settings:spending.import_csv")}</Link>
-              </Button>
+              <Link
+                to="/import"
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" }),
+                  "h-7 shrink-0 text-xs",
+                )}
+              >
+                {t("settings:spending.import_csv")}
+              </Link>
             </div>
           </Section>
 
@@ -115,7 +123,7 @@ interface SectionProps {
 function Section({ title, meta, children }: SectionProps) {
   return (
     <section>
-      <div className="mb-[14px] flex items-baseline justify-between gap-3">
+      <div className="mb-3.5 flex items-baseline justify-between gap-3">
         <h2 className="text-muted-foreground text-xs font-medium uppercase tracking-widest">
           {title}
         </h2>

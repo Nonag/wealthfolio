@@ -25,7 +25,9 @@ pub(super) fn transport_err_from_sync(
         retry_class: e.retry_class(),
         error_code: e.error_code().map(|s| s.to_string()),
         details: match &e {
-            wealthfolio_device_sync::DeviceSyncError::Api { details, .. } => details.clone(),
+            wealthfolio_device_sync::DeviceSyncError::Api { details, .. } => {
+                details.as_deref().cloned()
+            }
             _ => None,
         },
     }
@@ -130,6 +132,10 @@ impl OutboxStore for TauriEnginePorts {
 
     async fn has_pending_outbox(&self) -> Result<bool, String> {
         self.db.has_pending_outbox().await
+    }
+
+    async fn next_outbox_retry_at(&self) -> Result<Option<String>, String> {
+        self.db.next_outbox_retry_at().await
     }
 }
 

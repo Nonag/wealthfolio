@@ -245,7 +245,6 @@
     "asset_type_option": "Option",
     "asset_type_metal": "Metal (Commodity)",
     "asset_type_other": "Other",
-    "select_currency": "Select currency...",
     "select_symbol": "Select symbol...",
     "symbol_type_security": "Security",
     "symbol_type_crypto": "Crypto",
@@ -304,6 +303,8 @@
     "screenshot_alt": "Screenshot {{number}}",
     "downloading_update": "Downloading update...",
     "installing_update": "Installing update...",
+    "update_external_flatpak": "This copy of Wealthfolio was installed with Flatpak. Update it with Flatpak or your software center.",
+    "update_external_package_manager": "This installation can't be updated from within Wealthfolio. Update it the same way you installed it.",
     "update_failed": "Update failed. Please try again.",
     "remind_me_later": "Remind me later",
     "view_changelog": "View Changelog",
@@ -505,5 +506,9 @@
       "teamChanged": "Your household has changed. Reconnect Wealthfolio Connect to continue.",
       "rebind": "Reconnect Wealthfolio Connect to confirm this profile’s account and household."
     }
-  }
+  },
+  "remove": "Remove",
+  "remove_item": "Remove {{name}}",
+  "actions_for": "Actions for {{name}}",
+  "settings_for": "{{name}} settings"
 }

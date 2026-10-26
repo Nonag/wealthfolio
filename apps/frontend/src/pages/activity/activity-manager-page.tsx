@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import { getAccounts } from "@/adapters";
 import { ExternalLink } from "@/components/external-link";
 import { useIsMobileViewport } from "@/hooks/use-platform";
@@ -22,10 +23,12 @@ import {
   Page,
   PageContent,
   PageHeader,
+  buttonVariants,
 } from "@wealthfolio/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useBackNavigation } from "@/pages/layouts/mobile-stack/use-mobile-stack";
 import type { AccountSelectOption } from "./components/forms/fields";
 import {
   ActivityTypePicker,
@@ -56,13 +59,14 @@ const ActivityManagerPage = () => {
   // Non-archived accounts for filtering
   const activeAccounts = useMemo(() => accounts.filter((acc) => !acc.isArchived), [accounts]);
 
+  const goBack = useBackNavigation();
   const handleClose = useCallback(() => {
     if (redirectTo) {
       navigate(redirectTo);
       return;
     }
-    navigate(-1);
-  }, [navigate, redirectTo]);
+    goBack();
+  }, [goBack, navigate, redirectTo]);
 
   // Get the selected account if pre-selected
   const selectedAccount = useMemo(() => {
@@ -181,15 +185,16 @@ const ActivityManagerPage = () => {
         }
         onBack={handleClose}
         actions={
-          <Button variant="ghost" size="sm" asChild>
-            <ExternalLink
-              href="https://wealthfolio.app/docs/concepts/activity-types"
-              className="flex items-center gap-1.5"
-            >
-              <Icons.HelpCircle className="h-4 w-4" />
-              {t("activity:learn_more")}
-            </ExternalLink>
-          </Button>
+          <ExternalLink
+            href="https://wealthfolio.app/docs/concepts/activity-types"
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "sm" }),
+              "flex items-center gap-1.5",
+            )}
+          >
+            <Icons.HelpCircle className="h-4 w-4" />
+            {t("activity:learn_more")}
+          </ExternalLink>
         }
       />
       <PageContent>
@@ -218,7 +223,7 @@ const ActivityManagerPage = () => {
                       className="w-fit"
                       onClick={() => navigate(`/account/${selectedAccount.id}`)}
                     >
-                      <Icons.ExternalLink className="mr-2 h-3 w-3" />
+                      <Icons.ExternalLink className="me-2 h-3 w-3" />
                       {t("activity:manager.go_to_account")}
                     </Button>
                   </AlertDescription>

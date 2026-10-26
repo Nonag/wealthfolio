@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { useBackNavigation } from "@/pages/layouts/mobile-stack/use-mobile-stack";
 
 import { useAccounts } from "@/hooks/use-accounts";
 import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
@@ -13,9 +14,9 @@ import {
   Page,
   PageContent,
   PageHeader,
+  useAmountFormatting,
   useDateFormatting,
   useIsMobile,
-  useNumberFormatting,
 } from "@wealthfolio/ui";
 import { usePersistentState } from "@/hooks/use-persistent-state";
 
@@ -42,10 +43,17 @@ import {
   SPENDING_MONTH_STORAGE_KEY,
 } from "../lib/month-period";
 import {
+  DASHBOARD_INTERVAL_STORAGE_KEY,
+  DASHBOARD_PERIOD_STORAGE_KEY,
+  portfolioPresetForSpendingPeriod,
+  rangePick,
+  spendingViewForPick,
+  type DashboardPeriodPick,
+} from "../lib/dashboard-period-sync";
+import {
   INSIGHTS_PERIOD_STORAGE_KEY,
-  INSIGHTS_PERIOD_UPDATED_AT_STORAGE_KEY,
   normalizeReportsPeriod,
-  periodPreferenceTimestamp,
+  SPENDING_INTERVAL_STORAGE_KEY,
 } from "../lib/period-preferences";
 import {
   SPENDING_RANGE_FROM_PARAM,
@@ -67,6 +75,7 @@ import {
   calendarMonthsBetweenInclusive,
   createZonedDayHourFormatter,
   daysInCalendarMonth,
+  formatZonedDateKey,
   getZonedDateParts,
   zonedCalendarDateBoundaryToDate,
 } from "../lib/timezone";
@@ -143,6 +152,7 @@ export default function SpendingInsightsPage() {
 
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const goBack = useBackNavigation();
   const [searchParams, setSearchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const { settings } = useSettingsContext();
@@ -154,47 +164,57 @@ export default function SpendingInsightsPage() {
     INSIGHTS_PERIOD_STORAGE_KEY,
     DEFAULT_REPORTS_PERIOD,
   );
-  const [, setPeriodUpdatedAt] = usePersistentState<string>(
-    INSIGHTS_PERIOD_UPDATED_AT_STORAGE_KEY,
-    "0",
-  );
   const [persistedMonth, setPersistedMonth] = usePersistentState<string | null>(
     SPENDING_MONTH_STORAGE_KEY,
     null,
   );
-  const period = normalizeReportsPeriod(persistedPeriod) ?? DEFAULT_REPORTS_PERIOD;
-  const [stage, setStage] = usePersistentState<InsightsStage>(STAGE_STORAGE_KEY, "where");
+  const [sharedPick, setSharedPick] = usePersistentState<DashboardPeriodPick | null>(
+    DASHBOARD_PERIOD_STORAGE_KEY,
+    null,
+  );
+  const [, setPortfolioPreset] = usePersistentState<string>(DASHBOARD_INTERVAL_STORAGE_KEY, "3M");
+  // Kept in step so the Spending tab falls back to the same preset.
+  const [, setSpendingInterval] = usePersistentState<string>(SPENDING_INTERVAL_STORAGE_KEY, "MTD");
+  const todayISO = formatZonedDateKey(new Date(), appTimezone);
+  // A link that names a period opens on it; it is applied once below and then
+  // removed from the URL. Otherwise follow the period last picked on the
+  // dashboard tabs or here, then the persisted preference.
+  const urlPeriod = normalizeReportsPeriod(searchParams.get("period"));
   const urlMonth = parseMonthKey(searchParams.get(SPENDING_MONTH_PARAM))
     ? searchParams.get(SPENDING_MONTH_PARAM)
     : null;
-  const customRange = useMemo(() => spendingRangeFromParams(searchParams), [searchParams]);
+  const urlRange = useMemo(() => spendingRangeFromParams(searchParams), [searchParams]);
+  const hasUrlPeriod = !!urlPeriod || !!urlMonth || !!urlRange;
+  const sharedView = useMemo(
+    () => (!hasUrlPeriod && sharedPick ? spendingViewForPick(sharedPick, todayISO) : null),
+    [hasUrlPeriod, sharedPick, todayISO],
+  );
+  const period =
+    urlPeriod ??
+    (sharedView?.kind === "period"
+      ? sharedView.code
+      : (normalizeReportsPeriod(persistedPeriod) ?? DEFAULT_REPORTS_PERIOD));
+  const [stage, setStage] = usePersistentState<InsightsStage>(STAGE_STORAGE_KEY, "where");
+  const customRange = urlRange ?? (sharedView?.kind === "range" ? sharedView.range : undefined);
   const customMonth = customRange
     ? null
     : (urlMonth ??
-      (!searchParams.has("period") && parseMonthKey(persistedMonth) ? persistedMonth : null));
-
-  // ─── URL ↔ state sync ─────────────────────────────────────────────────────
-  // ?stage=where|changed|when and ?period=MTD|LAST_MONTH|3M|6M|YTD|1Y drive the page
-  // when present, otherwise fall back to the persisted localStorage values.
-  // Linking from the dashboard (`/spending/insights?stage=where`) and reload-
-  // ability of the current view both rely on this.
-  useEffect(() => {
-    const urlStage = searchParams.get("stage");
-    if (urlStage && VALID_STAGES.includes(urlStage as InsightsStage) && urlStage !== stage) {
-      setStage(urlStage as InsightsStage);
-    }
-    const urlPeriod = normalizeReportsPeriod(searchParams.get("period"));
-    if (urlPeriod && urlPeriod !== period) {
-      setPersistedPeriod(urlPeriod);
-    }
-    if (urlMonth && urlMonth !== persistedMonth) {
-      setPersistedMonth(urlMonth);
-    }
-    // Eslint disable: we intentionally run only on URL change, not on every
-    // state change — the inverse direction (state → URL) is handled by the
-    // wrapped setters below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+      (hasUrlPeriod
+        ? null
+        : sharedView
+          ? sharedView.kind === "month"
+            ? sharedView.monthKey
+            : null
+          : parseMonthKey(persistedMonth)
+            ? persistedMonth
+            : null));
+  const sharePeriod = useCallback(
+    (code: ReportsPeriod) => {
+      setSharedPick({ kind: "spending", code });
+      setPortfolioPreset(portfolioPresetForSpendingPeriod(code));
+    },
+    [setSharedPick, setPortfolioPreset],
+  );
 
   const setStageAndUrl = useCallback(
     (next: InsightsStage) => {
@@ -211,67 +231,63 @@ export default function SpendingInsightsPage() {
     [setStage, setSearchParams],
   );
 
-  const setPeriodAndUrl = useCallback(
-    (next: ReportsPeriod) => {
-      setPersistedPeriod(next);
-      setPeriodUpdatedAt(periodPreferenceTimestamp());
-      setPersistedMonth(null);
-      setSearchParams(
-        (prev) => {
-          const p = new URLSearchParams(prev);
-          p.set("period", next);
-          p.delete(SPENDING_MONTH_PARAM);
-          p.delete(SPENDING_RANGE_FROM_PARAM);
-          p.delete(SPENDING_RANGE_TO_PARAM);
-          return p;
-        },
-        { replace: true },
-      );
-    },
-    [setPersistedPeriod, setPeriodUpdatedAt, setPersistedMonth, setSearchParams],
-  );
+  // Picks live in the shared period and the persisted preference, never in the
+  // URL, so back/forward cannot bring back an older period.
+  const selectPeriod = (next: ReportsPeriod) => {
+    setPersistedPeriod(next);
+    setSpendingInterval(next);
+    sharePeriod(next);
+    setPersistedMonth(null);
+  };
 
-  const setCustomMonthAndUrl = useCallback(
-    (next: string | null) => {
-      setPersistedMonth(next);
-      setPeriodUpdatedAt(periodPreferenceTimestamp());
-      setSearchParams(
-        (prev) => {
-          const p = new URLSearchParams(prev);
-          p.set("period", period);
-          p.delete(SPENDING_RANGE_FROM_PARAM);
-          p.delete(SPENDING_RANGE_TO_PARAM);
-          if (next) p.set(SPENDING_MONTH_PARAM, next);
-          else p.delete(SPENDING_MONTH_PARAM);
-          return p;
-        },
-        { replace: true },
-      );
-    },
-    [period, setPersistedMonth, setPeriodUpdatedAt, setSearchParams],
-  );
+  const selectCustomMonth = (next: string | null) => {
+    setPersistedMonth(next);
+    if (next) setSharedPick({ kind: "month", monthKey: next });
+    else sharePeriod(period);
+  };
 
-  const setCustomRangeAndUrl = (next: DateRange | undefined) => {
+  const selectCustomRange = (next: DateRange | undefined) => {
     if (next && (!next.from || !next.to)) return;
     setPersistedMonth(null);
-    setPeriodUpdatedAt(periodPreferenceTimestamp());
+    if (next?.from && next.to) setSharedPick(rangePick({ from: next.from, to: next.to }));
+    else sharePeriod(period);
+  };
+
+  // ?stage=where|changed|when drives the page when present. A period named in
+  // the URL (?period=, ?spendingMonth=, ?spendingFrom=&spendingTo=) is applied
+  // once like a pick and then dropped from the URL.
+  useEffect(() => {
+    const urlStage = searchParams.get("stage");
+    if (urlStage && VALID_STAGES.includes(urlStage as InsightsStage) && urlStage !== stage) {
+      setStage(urlStage as InsightsStage);
+    }
+    if (!hasUrlPeriod) return;
+    if (urlRange || urlMonth) {
+      setPersistedPeriod(period);
+      setSpendingInterval(period);
+      if (urlRange) selectCustomRange(urlRange);
+      else selectCustomMonth(urlMonth);
+    } else {
+      selectPeriod(period);
+    }
     setSearchParams(
       (prev) => {
         const p = new URLSearchParams(prev);
-        p.set("period", period);
-        p.delete(SPENDING_MONTH_PARAM);
-        if (next?.from && next.to) {
-          p.set(SPENDING_RANGE_FROM_PARAM, formatDateISO(next.from));
-          p.set(SPENDING_RANGE_TO_PARAM, formatDateISO(next.to));
-        } else {
-          p.delete(SPENDING_RANGE_FROM_PARAM);
-          p.delete(SPENDING_RANGE_TO_PARAM);
+        for (const param of [
+          "period",
+          SPENDING_MONTH_PARAM,
+          SPENDING_RANGE_FROM_PARAM,
+          SPENDING_RANGE_TO_PARAM,
+        ]) {
+          p.delete(param);
         }
         return p;
       },
       { replace: true },
     );
-  };
+    // Runs only when the URL changes; the setters read the state it produced.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const selectionKey = customRange
     ? `${formatDateISO(customRange.from)}:${formatDateISO(customRange.to)}`
@@ -515,12 +531,12 @@ export default function SpendingInsightsPage() {
   const periodToggle = (
     <SpendingPeriodSelector
       value={customMonth || customRange ? null : period}
-      onValueChange={setPeriodAndUrl}
+      onValueChange={selectPeriod}
       customMonth={customMonth}
       customRange={customRange}
-      onCustomRangeChange={setCustomRangeAndUrl}
+      onCustomRangeChange={selectCustomRange}
       maxMonth={maxPickerMonth}
-      onCustomMonthChange={setCustomMonthAndUrl}
+      onCustomMonthChange={selectCustomMonth}
       className="w-[calc(100vw-6rem)] max-w-[calc(100vw-6rem)] sm:w-full sm:max-w-screen-md md:max-w-2xl"
     />
   );
@@ -530,7 +546,7 @@ export default function SpendingInsightsPage() {
       <PageHeader
         heading={isMobile ? undefined : t("spending:insightsPage.heading")}
         onBack={() => {
-          if (window.history.length > 1) navigate(-1);
+          if (window.history.length > 1) goBack();
           else navigate("/dashboard?tab=spending");
         }}
         actions={periodToggle}
@@ -577,7 +593,7 @@ export default function SpendingInsightsPage() {
         {(insightErrored ||
           (stage === "changed" && mtdComparisonErrored) ||
           (stage === "when" && heatmapInsightErrored)) && (
-          <div className="flex items-center justify-between gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs text-amber-700 dark:text-amber-300">
+          <div className="border-warning-subtle-border bg-warning-subtle text-warning-subtle-foreground flex items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-xs">
             <span>
               <span className="font-semibold">{t("spending:insightsPage.loadError")}</span>{" "}
               {t("spending:insightsPage.showingZeros")}
@@ -752,7 +768,7 @@ function ForeignCurrencyBanner({
   nativeTotals: Record<string, number>;
   asOf: string; // RFC3339
 }) {
-  const numberFormatting = useNumberFormatting();
+  const amountFormatting = useAmountFormatting();
   const dateFormatting = useDateFormatting();
 
   const { t } = useTranslation();
@@ -761,16 +777,9 @@ function ForeignCurrencyBanner({
     if (isBalanceHidden) return "••••";
     const v = nativeTotals[ccy];
     if (v == null) return ccy;
-    try {
-      return numberFormatting.formatDecimal(Math.abs(v), {
-        style: "currency",
-        currency: ccy,
-        maximumFractionDigits: 0,
-      });
-    } catch {
-      // Unknown ISO code → fall back to bare magnitude + code.
-      return `${Math.abs(v).toFixed(0)} ${ccy}`;
-    }
+    // Intl rejects malformed codes → fall back to bare magnitude + code.
+    if (!/^[A-Za-z]{3}$/.test(ccy)) return `${Math.abs(v).toFixed(0)} ${ccy}`;
+    return amountFormatting.formatRoundedAmount(Math.abs(v), ccy);
   };
   const asOfDate = dateFormatting.formatDate(asOf, {
     year: "numeric",
@@ -789,7 +798,7 @@ function ForeignCurrencyBanner({
       </>
     );
   return (
-    <div className="text-muted-foreground border-border/60 bg-muted/30 rounded-md border px-3 py-2 text-[11px]">
+    <div className="text-muted-foreground border-border/60 bg-muted/30 text-2xs rounded-md border px-3 py-2">
       <span className="text-foreground/90 font-medium">
         {t("spending:insightsPage.multiCurrency")}
       </span>{" "}

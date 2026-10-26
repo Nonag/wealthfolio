@@ -10,9 +10,10 @@ import { Button } from "@wealthfolio/ui/components/ui/button";
 import { Card, CardHeader } from "@wealthfolio/ui/components/ui/card";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { AnimatePresence, motion } from "motion/react";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useBackNavigation, useLeaveGuard } from "@/pages/layouts/mobile-stack/use-mobile-stack";
 
 // Context
 import {
@@ -305,6 +306,7 @@ function useStepValidation(
 function ImportWizardContent() {
   const { state, dispatch, validateDrafts, previewAssets } = useImportContext();
   const navigate = useNavigate();
+  const goBack = useBackNavigation();
   const { t } = useTranslation();
   const { isMobile } = usePlatform();
 
@@ -353,6 +355,14 @@ function ImportWizardContent() {
   );
 
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  // Mid-import, Android's Back and tapping the tab again ask before discarding,
+  // as the page's own back and cancel buttons do; agreeing makes the leave they
+  // asked for.
+  const heldLeave = useRef<(() => void) | null>(null);
+  useLeaveGuard(state.step !== "upload" && state.step !== "result", (proceed) => {
+    heldLeave.current = proceed;
+    setShowCancelDialog(true);
+  });
   const [isNextLoading, setIsNextLoading] = useState(false);
 
   // Fetch accounts to determine tracking mode based on selected account
@@ -605,16 +615,19 @@ function ImportWizardContent() {
   const handleCancelClick = useCallback(() => {
     // On first step or result step, just navigate back without confirmation
     if (state.step === "upload" || state.step === "result") {
-      navigate(-1);
+      goBack();
     } else {
       // Show confirmation dialog for other steps
+      heldLeave.current = null;
       setShowCancelDialog(true);
     }
-  }, [state.step, navigate]);
+  }, [state.step, goBack]);
 
   const handleConfirmCancel = useCallback(() => {
-    navigate(-1);
-  }, [navigate]);
+    const leave = heldLeave.current ?? goBack;
+    heldLeave.current = null;
+    leave();
+  }, [goBack]);
 
   // Get step-specific next button label
   const getNextLabel = useCallback(() => {
@@ -656,7 +669,7 @@ function ImportWizardContent() {
   if (selectedAccount && !isCsvImportAllowed) {
     return (
       <Page>
-        <PageHeader heading={pageTitle} onBack={() => navigate(-1)} />
+        <PageHeader heading={pageTitle} onBack={goBack} />
         <PageContent>
           <div className="mx-auto max-w-3xl space-y-4 py-6">
             <AlertFeedback variant="warning" title={t("activity:import.page.csvDisabledTitle")}>
@@ -678,7 +691,10 @@ function ImportWizardContent() {
         onBack={isMobile ? handleCancelClick : undefined}
         actions={
           <div className="flex items-center gap-2">
-            <ImportHelpPopover defaultTab={isHoldingsMode ? "holdings" : "activities"} />
+            <ImportHelpPopover
+              defaultTab={isHoldingsMode ? "holdings" : "activities"}
+              transactionImport={isTransactionImport}
+            />
             {!isMobile && (
               <Button
                 variant="ghost"
@@ -686,7 +702,7 @@ function ImportWizardContent() {
                 onClick={handleCancelClick}
                 className="hidden sm:flex"
               >
-                <Icons.X className="mr-2 h-4 w-4" />
+                <Icons.X className="me-2 h-4 w-4" />
                 {t("activity:import.toolbar.cancel")}
               </Button>
             )}

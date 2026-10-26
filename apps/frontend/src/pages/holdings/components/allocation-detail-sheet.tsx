@@ -9,7 +9,7 @@ import {
 } from "@wealthfolio/ui/components/ui/sheet";
 import { AmountDisplay, Skeleton } from "@wealthfolio/ui";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -18,6 +18,7 @@ import { getHoldingsByAllocation } from "@/adapters";
 import { namedChild, namedChildren } from "@/lib/allocation-children";
 import { TickerAvatar } from "@/components/ticker-avatar";
 import { useBalancePrivacy } from "@/hooks/use-balance-privacy";
+import { useEffectOnChange } from "@/hooks/use-effect-on-change";
 import { HoldingType } from "@/lib/constants";
 import type {
   AccountScope,
@@ -63,7 +64,7 @@ export function AllocationDetailSheet({
   );
 
   // Set initial category when sheet opens
-  useEffect(() => {
+  useEffectOnChange(() => {
     if (isOpen && allocation?.categories?.length) {
       const categoryId = initialCategoryId ?? allocation.categories[0]?.categoryId ?? null;
       // Try direct match on top-level
@@ -210,10 +211,7 @@ export function AllocationDetailSheet({
     <Sheet open={isOpen} onOpenChange={handleOpenChange}>
       <SheetContent
         className="flex w-full flex-col overflow-hidden sm:max-w-xl"
-        onOpenAutoFocus={(event) => {
-          event.preventDefault();
-          titleRef.current?.focus();
-        }}
+        initialFocus={titleRef}
         style={{
           paddingTop: "max(env(safe-area-inset-top, 0px), 1.5rem)",
         }}
@@ -259,7 +257,7 @@ export function AllocationDetailSheet({
                         {hasChildren ? (
                           <Icons.ChevronRight
                             className={`text-muted-foreground h-3.5 w-3.5 transition-transform duration-200 ${
-                              isExpanded ? "rotate-90" : ""
+                              isExpanded ? "rotate-90" : "rtl:rotate-180"
                             }`}
                           />
                         ) : (
@@ -283,7 +281,7 @@ export function AllocationDetailSheet({
                         isHidden={isBalanceHidden}
                         className="shrink-0 text-sm"
                       />
-                      <span className="text-muted-foreground w-12 shrink-0 text-right text-xs tabular-nums">
+                      <span className="text-muted-foreground w-12 shrink-0 text-end text-xs tabular-nums">
                         {category.percentage.toFixed(1)}%
                       </span>
                     </div>
@@ -305,7 +303,7 @@ export function AllocationDetailSheet({
                               return (
                                 <div
                                   key={child.categoryId}
-                                  className={`flex cursor-pointer items-center gap-3 py-2.5 pl-11 pr-4 transition-colors ${
+                                  className={`flex cursor-pointer items-center gap-3 py-2.5 pe-4 ps-11 transition-colors ${
                                     isChildSelected ? "bg-muted" : "hover:bg-muted/50"
                                   } ${childIdx > 0 ? "border-t border-dashed" : ""}`}
                                   onClick={(e) => {
@@ -326,7 +324,7 @@ export function AllocationDetailSheet({
                                     isHidden={isBalanceHidden}
                                     className="text-muted-foreground shrink-0 text-xs"
                                   />
-                                  <span className="text-muted-foreground w-12 shrink-0 text-right text-xs tabular-nums">
+                                  <span className="text-muted-foreground w-12 shrink-0 text-end text-xs tabular-nums">
                                     {child.percentage.toFixed(1)}%
                                   </span>
                                 </div>
@@ -369,9 +367,9 @@ export function AllocationDetailSheet({
                         <Skeleton className="h-4 w-16" />
                         <Skeleton className="h-3 w-32" />
                       </div>
-                      <div className="space-y-1.5 text-right">
-                        <Skeleton className="ml-auto h-4 w-20" />
-                        <Skeleton className="ml-auto h-3 w-12" />
+                      <div className="space-y-1.5 text-end">
+                        <Skeleton className="ms-auto h-4 w-20" />
+                        <Skeleton className="ms-auto h-3 w-12" />
                       </div>
                     </div>
                   ))}
@@ -437,7 +435,7 @@ export function AllocationDetailSheet({
                           <p className="truncate text-sm font-semibold">{primaryLabel}</p>
                           <p className="text-muted-foreground truncate text-xs">{secondaryLabel}</p>
                         </div>
-                        <div className="text-right">
+                        <div className="text-end">
                           <AmountDisplay
                             value={holding.marketValue}
                             currency={baseCurrency}
@@ -468,10 +466,8 @@ export function AllocationDetailSheet({
         </div>
 
         <SheetFooter className="border-t pt-4">
-          <SheetClose asChild>
-            <Button variant="outline" className="w-full">
-              {t("holdings:close")}
-            </Button>
+          <SheetClose render={<Button variant="outline" className="w-full" />}>
+            {t("holdings:close")}
           </SheetClose>
         </SheetFooter>
       </SheetContent>

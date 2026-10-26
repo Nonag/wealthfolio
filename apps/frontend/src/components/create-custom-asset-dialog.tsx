@@ -1,3 +1,4 @@
+import { useEffectOnChange } from "@/hooks/use-effect-on-change";
 import { useSettingsContext } from "@/lib/settings-provider";
 import type { SymbolSearchResult } from "@/lib/types";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -27,7 +28,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@wealthfolio/ui/components/ui/select";
-import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -95,7 +95,7 @@ export function CreateCustomAssetDialog({
   });
 
   // Reset form with correct currency when dialog opens or currency changes
-  useEffect(() => {
+  useEffectOnChange(() => {
     if (open) {
       form.reset({
         symbol: defaultSymbol.toUpperCase(),
@@ -205,7 +205,11 @@ export function CreateCustomAssetDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{t("common:component.asset_type")}</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select
+                      items={assetTypeOptions}
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder={t("common:component.select_type")} />

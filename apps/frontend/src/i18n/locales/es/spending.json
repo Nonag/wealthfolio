@@ -21,6 +21,9 @@
     "nameRequired": "El nombre es obligatorio",
     "namePlaceholder": "Nombre de la categoría",
     "icon": "Icono",
+    "parent": "Categoría principal",
+    "topLevel": "Ninguna (nivel superior)",
+    "parentLockedByBudget": "Elimina primero los objetivos de presupuesto de esta categoría. Los presupuestos solo se aplican a categorías de nivel superior.",
     "color": "Color",
     "hex": "Hex",
     "create": "Crear categoría",
@@ -106,6 +109,7 @@
     "selectCategory": "Selecciona una categoría",
     "priorityLabel": "Prioridad",
     "priorityHint": "Las reglas de mayor prioridad se comprueban primero (0-100).",
+    "priorityInvalid": "La prioridad debe ser un número entero mayor o igual que 0",
     "updateRule": "Actualizar regla",
     "createRule": "Crear regla",
     "scopeLabel": "Se aplica a",
@@ -785,19 +789,29 @@
     "title": "Flujo de dinero",
     "subtitle": "De dónde vino tu dinero y a dónde fue para {{period}}.",
     "focusSubtitle": "Todas las categorías para {{period}}.",
+    "focusSubcategoriesSubtitle": "Todas las subcategorías para {{period}}.",
     "back": "Todos los flujos",
+    "backTo": "Volver a {{name}}",
     "chartLabel": "Diagrama del flujo de dinero. Usa las flechas para moverte entre los flujos.",
     "nodeAria": "{{name}}, {{amount}}",
+    "nodeActionAria": "{{name}}, {{amount}}. {{action}}",
     "shareOfIncome": "{{pct}} de los ingresos",
     "shareOfTotal": "{{pct}} del total",
     "clickTransactions": "Haz clic para ver las transacciones",
     "clickCategories": "Haz clic para ver todas las categorías",
+    "clickSubcategories": "Haz clic para ver las subcategorías",
+    "action": {
+      "categories": "Ver todas las categorías",
+      "subcategories": "Ver subcategorías",
+      "transactions": "Ver transacciones"
+    },
     "node": {
       "total": "Total",
       "shortfall": "Déficit",
       "refunds": "Reembolsos netos",
       "surplus": "Sobrante",
-      "uncategorizedIncome": "Ingresos sin categorizar"
+      "uncategorizedIncome": "Ingresos sin categorizar",
+      "netSpending": "Gasto neto"
     },
     "hint": {
       "total": "Dinero entrante más reembolsos netos y cualquier déficit. Siempre igual al dinero saliente.",
@@ -806,9 +820,12 @@
       "refunds": "Categorías donde los reembolsos superaron el gasto.",
       "saved": "Transferido a cuentas de ahorro e inversión.",
       "surplus": "Entró, pero no se gastó ni se reservó.",
-      "uncategorized": "Gastos que aún no tienen categoría."
+      "uncategorized": "Gastos que aún no tienen categoría.",
+      "net": "Lo que costó esta categoría después de los reembolsos.",
+      "direct": "Asignado a la propia categoría, no a una subcategoría."
     },
-    "groupRefunds": "Antes de restar {{amount}} en reembolsos netos."
+    "groupRefunds": "Antes de restar {{amount}} en reembolsos netos.",
+    "categoryRefunds": "Antes de restar {{refunds}} en reembolsos netos. Gasto neto: {{net}}."
   },
   "budgetChart": {
     "overBudget": "Presupuesto excedido",
@@ -1015,6 +1032,7 @@
     "deleteGroupWithCategories_other": "Sus {{count}} categorías y sus presupuestos se moverán a «Otros». Los márgenes de grupo se sumarán para todos los meses. Esto no se puede deshacer.",
     "deleteGroupWithCategories_many": "Sus {{count}} categorías y sus presupuestos se moverán a «Otros». Los márgenes de grupo se sumarán para todos los meses. Esto no se puede deshacer.",
     "deleteGroupRolloverBlocked": "Este grupo no se puede eliminar porque tiene un ajuste de traspaso guardado, aunque el traspaso esté desactivado.",
+    "cannotUndo": "Esto no se puede deshacer.",
     "deleting": "Eliminando...",
     "addCategory": "Añadir categoría",
     "noOtherCategories": "No hay otras categorías disponibles. Crea una en",
@@ -1075,6 +1093,7 @@
     "addSource_many": "Añadir fuente ({{count}} disponibles)",
     "overridesTitle_one": "Excepción · {{count}}",
     "overridesTitle_other": "Excepciones · {{count}}",
-    "overridesTitle_many": "Excepciones · {{count}}"
+    "overridesTitle_many": "Excepciones · {{count}}",
+    "sourceMonth": "Mes de origen"
   }
 }

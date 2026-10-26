@@ -26,18 +26,21 @@ import {
 } from "@/lib/activity-utils";
 import { buildOccSymbol, isValidOptionExpiration, parseOccSymbol } from "@/lib/occ-symbol";
 import { generateId } from "@/lib/id";
+import { normalizeCurrency } from "@/lib/utils";
 import type { ActivityCreate, ActivityDetails, ActivityUpdate } from "@/lib/types";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useForm, type Resolver, type SubmitHandler } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { toast } from "sonner";
 import { useActivityMutations } from "../../hooks/use-activity-mutations";
 import { showValidationToast, type AccountSelectOption } from "../forms/fields";
-import { newActivitySchema, type NewActivityFormValues } from "../forms/schemas";
+import { createActivitySchemas, type NewActivityFormValues } from "../forms/schemas";
 import { MobileActivitySteps } from "./mobile-activity-steps";
 import { getMobileActivityAssetId, hasStoredCustomTradeAmount } from "./mobile-activity-utils";
+import { Spinner } from "@wealthfolio/ui";
+import { useEffectOnChange } from "@/hooks/use-effect-on-change";
 
 interface MobileActivityFormProps {
   accounts: AccountSelectOption[];
@@ -54,6 +57,7 @@ interface MobileActivityFormProps {
 
 export interface TransferValidationInput {
   activityType: string;
+  accountId?: string;
   transferMode?: string;
   isExternal?: boolean;
   direction?: string;
@@ -109,8 +113,7 @@ function isValidMobileActivityType(
 }
 
 /**
- * Validates transfer-specific fields that the Zod schema can't enforce
- * (transferActivitySchema lives inside a discriminatedUnion which doesn't support superRefine).
+ * Validates transfer-specific fields that the Zod schema doesn't enforce.
  * Returns null if valid, or the first error found.
  */
 export function validateTransferFields(
@@ -200,11 +203,35 @@ export function validateTransferFields(
     }
   }
 
+  if (!isExternal && input.accountId && input.accountId === input.toAccountId) {
+    if (!isCash) {
+      return {
+        field: "toAccountId",
+        message: tr(
+          "activity:form.err_accounts_different",
+          "Source and destination accounts must be different.",
+        ),
+      };
+    }
+    if (
+      normalizeCurrency(input.sourceCurrency ?? undefined) ===
+      normalizeCurrency(input.destinationCurrency ?? undefined)
+    ) {
+      return {
+        field: "destinationCurrency",
+        message: tr(
+          "activity:form.err_same_account_currencies",
+          "Choose different currencies for a same-account transfer.",
+        ),
+      };
+    }
+  }
+
   return null;
 }
 
 /**
- * Validates trade fields that the Zod schema can't enforce in a discriminatedUnion.
+ * Validates trade fields that the Zod schema doesn't enforce.
  * For options: requires all structured fields. For stocks/bonds: requires assetId.
  */
 export function validateTradeFields(
@@ -410,6 +437,8 @@ export function MobileActivityForm({
       quoteMode:
         activity?.assetQuoteMode === QuoteMode.MANUAL ? QuoteMode.MANUAL : QuoteMode.MARKET,
       exchangeMic: activity?.exchangeMic,
+      symbolInstrumentType: activity?.instrumentType ?? undefined,
+      symbolQuoteCcy: activity?.assetQuoteCcy ?? activity?.currency ?? undefined,
       showCurrencySelect: false,
       ...(isTransferType && {
         transferMode: initialTransferMode,
@@ -425,7 +454,6 @@ export function MobileActivityForm({
       ...(isOptionActivity && {
         assetType: "option" as const,
         assetKind: "OPTION",
-        symbolQuoteCcy: activity?.currency ?? undefined,
         underlyingSymbol: parsedOcc?.underlying ?? "",
         strikePrice: parsedOcc?.strikePrice,
         expirationDate: parsedOcc?.expiration,
@@ -436,19 +464,20 @@ export function MobileActivityForm({
       ...(isBondActivity && {
         assetType: "bond" as const,
         assetKind: "BOND",
-        symbolQuoteCcy: activity?.currency ?? undefined,
       }),
     };
   }, [activity]);
 
+  const schema = useMemo(() => createActivitySchemas(t).newActivity, [t]);
+
   const form = useForm<NewActivityFormValues>({
-    resolver: zodResolver(newActivitySchema) as Resolver<NewActivityFormValues>,
+    resolver: zodResolver(schema) as Resolver<NewActivityFormValues>,
     defaultValues: defaultValues as any,
   });
   const { reset } = form;
   const storedAmountIsCustom = useMemo(() => hasStoredCustomTradeAmount(activity), [activity]);
 
-  useEffect(() => {
+  useEffectOnChange(() => {
     if (!open) return;
 
     const nextDefaultValues = activity?.date
@@ -467,8 +496,9 @@ export function MobileActivityForm({
   // whatever was typed belonged to the previous type, so amount ownership
   // resets and the calculated trade total takes over again. Without this, a
   // deposit amount typed before switching to BUY/SELL would be submitted as
-  // an attested custom trade total.
-  useEffect(() => {
+  // an attested custom trade total. Only on a switch: a phone screen shown
+  // again replays its effects, which would drop a total typed after the switch.
+  useEffectOnChange(() => {
     if (form.getFieldState("activityType").isDirty) {
       amountWasEdited.current = false;
     }
@@ -561,10 +591,11 @@ export function MobileActivityForm({
         submitData.symbolQuoteCcy = submitData.currency;
       }
 
-      // Validate transfer-specific required fields (schema can't use superRefine in discriminatedUnion)
+      // Validate transfer-specific required fields (not enforced by the schema)
       const transferError = validateTransferFields(
         {
           activityType: submitData.activityType,
+          accountId: submitData.accountId,
           transferMode: _tm,
           isExternal: _isExternal,
           direction: _direction,
@@ -623,6 +654,7 @@ export function MobileActivityForm({
           }
 
           await saveInternalTransferPairMutation.mutateAsync({
+            editedActivityId: id,
             transferOutId: id ? transferOutId : undefined,
             transferInId: id ? transferInId : undefined,
             fromAccountId: submitData.accountId,
@@ -992,7 +1024,7 @@ export function MobileActivityForm({
                 onClick={handleBack}
                 className="flex-1"
               >
-                <Icons.ArrowLeft className="mr-2 h-4 w-4" />
+                <Icons.ArrowLeft className="me-2 h-4 w-4 rtl:rotate-180" />
                 {t("activity:mobile_back")}
               </Button>
             )}
@@ -1006,7 +1038,7 @@ export function MobileActivityForm({
                 disabled={!form.watch("activityType") && currentStep === 1}
               >
                 {t("activity:mobile_next")}
-                <Icons.ArrowRight className="ml-2 h-4 w-4" />
+                <Icons.ArrowRight className="ms-2 h-4 w-4 rtl:rotate-180" />
               </Button>
             ) : (
               <Button
@@ -1017,9 +1049,9 @@ export function MobileActivityForm({
                 disabled={isLoading}
               >
                 {isLoading ? (
-                  <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
+                  <Spinner className="me-2 h-4 w-4" />
                 ) : (
-                  <Icons.Check className="mr-2 h-4 w-4" />
+                  <Icons.Check className="me-2 h-4 w-4" />
                 )}
                 {activity?.id
                   ? t("activity:mobile_update_activity")

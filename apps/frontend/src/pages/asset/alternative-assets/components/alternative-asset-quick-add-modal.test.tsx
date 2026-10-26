@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { Activity, type ReactNode } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { AlternativeAssetKind } from "@/lib/types";
 import { AlternativeAssetQuickAddModal } from "./alternative-asset-quick-add-modal";
@@ -18,7 +18,24 @@ vi.mock("../hooks/use-alternative-asset-mutations", () => ({
 }));
 vi.mock("@wealthfolio/ui", () => ({
   CurrencyInput: () => null,
-  DatePickerInput: () => null,
+  DatePickerInput: ({ value, onChange }: { value?: Date; onChange: (date: Date) => void }) => (
+    <input
+      data-testid="quick-add-date"
+      value={
+        value
+          ? [
+              value.getFullYear(),
+              String(value.getMonth() + 1).padStart(2, "0"),
+              String(value.getDate()).padStart(2, "0"),
+            ].join("-")
+          : ""
+      }
+      onChange={(event) => {
+        const [year, month, day] = event.target.value.split("-").map(Number);
+        onChange(new Date(year, month - 1, day));
+      }}
+    />
+  ),
   QuantityInput: ({
     value,
     onValueChange,
@@ -118,8 +135,8 @@ it.each([undefined, "auto_loan"])(
         expect.objectContaining({
           kind: "liability",
           metadata: { sub_type: defaultLiabilityType ?? "mortgage" },
-          // A manual loan keeps only its amounts; the backend stores them.
-          loan: { originalAmount: 500000, interestRate: undefined },
+          // The backend stores manual amounts and an entered origination date.
+          loan: { originalAmount: 500000, interestRate: undefined, originationDate: undefined },
         }),
       ),
     );
@@ -232,6 +249,40 @@ it("clears a save refusal once the form changes", async () => {
   await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
 });
 
+it("keeps a save refusal when its phone screen is shown again", async () => {
+  // A phone screen kept under another one is a hidden <Activity>, whose
+  // effects run again when it is shown.
+  create.mockRejectedValueOnce(new Error("LOAN_AMORTIZATION_INVALID"));
+  const client = new QueryClient();
+  const originationDate = new Date(2025, 5, 1);
+  const view = (hidden: boolean) => (
+    <QueryClientProvider client={client}>
+      <Activity mode={hidden ? "hidden" : "visible"}>
+        <AlternativeAssetQuickAddModal
+          open
+          onOpenChange={() => undefined}
+          defaultKind={AlternativeAssetKind.LIABILITY}
+          defaultName="Mortgage"
+          defaultOriginationDate={originationDate}
+        />
+      </Activity>
+    </QueryClientProvider>
+  );
+  const { rerender } = render(view(false));
+  await screen.findByRole("combobox", { name: "Select Liability Type" });
+  fireEvent.change(screen.getAllByLabelText("Amount")[0], { target: { value: "400000" } });
+  fireEvent.change(screen.getByLabelText("Years"), { target: { value: "25" } });
+  fireEvent.change(screen.getByLabelText("Interest Rate (%)"), { target: { value: "5" } });
+  await screen.findByText(/300 payments/);
+  fireEvent.click(screen.getByRole("button", { name: "Add Liability" }));
+  await screen.findByRole("alert");
+
+  rerender(view(true));
+  rerender(view(false));
+
+  expect(screen.getByRole("alert")).toBeInTheDocument();
+});
+
 it("asks for no preview, and shows no error, until the terms are entered", async () => {
   show(
     <AlternativeAssetQuickAddModal
@@ -338,3 +389,40 @@ it("folds the less common terms under More options", async () => {
   expect(screen.getByText("First payment date")).toBeInTheDocument();
   expect(screen.getByText("Interest calculation")).toBeInTheDocument();
 });
+
+it.each(["", "25", "0"])(
+  "manual loan dates preserve the entered current balance %s",
+  async (balance) => {
+    show(
+      <AlternativeAssetQuickAddModal
+        open
+        onOpenChange={() => undefined}
+        defaultKind={AlternativeAssetKind.LIABILITY}
+        defaultName="Manual loan"
+        defaultLiabilityType="personal_loan"
+      />,
+    );
+    await screen.findByRole("combobox", { name: "Select Liability Type" });
+    fireEvent.click(screen.getByRole("switch", { name: "Estimate balance from payments" }));
+    fireEvent.change(screen.getAllByLabelText("Amount")[0], { target: { value: "100" } });
+    fireEvent.change(screen.getAllByTestId("quick-add-date")[0], {
+      target: { value: "2022-06-05" },
+    });
+    if (balance)
+      fireEvent.change(screen.getAllByLabelText("Amount")[1], { target: { value: balance } });
+    fireEvent.click(screen.getByRole("button", { name: "Add Liability" }));
+    await waitFor(() => expect(create).toHaveBeenCalled());
+    const request = create.mock.lastCall![0];
+    expect(request.loan.originationDate).toBe("2022-06-05");
+    expect(request.loan.schedule).toBeUndefined();
+    expect(request.currentValue).toBe(balance || "100");
+    const date = new Date();
+    const today = [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+    ].join("-");
+    expect(request.valueDate).toBe(balance ? today : "2022-06-05");
+    expect(preview).not.toHaveBeenCalled();
+  },
+);

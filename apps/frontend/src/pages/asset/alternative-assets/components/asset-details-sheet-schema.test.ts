@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { AlternativeAssetKind } from "@/lib/types";
+import { AlternativeAssetKind, type AlternativeAssetHolding } from "@/lib/types";
 import {
   assetDetailsSchema,
   formValuesToMetadata,
   getDefaultDetailsFormValues,
   liabilityLoanSetup,
+  toLinkedLiability,
   type LiabilityDetailsFormValues,
 } from "./asset-details-sheet-schema";
 
@@ -122,6 +123,33 @@ describe("correcting original loan terms", () => {
     }
   });
 
+  it("explains a zero payment with its own message", () => {
+    const result = assetDetailsSchema.safeParse({ ...defaults(), paymentAmount: 0 });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues
+        .filter((issue) => issue.path[0] === "paymentAmount")
+        .map((issue) => issue.message);
+      expect(messages[0]).toBe("asset:loanActions.validation.payment_positive");
+    }
+  });
+
+  it("explains a term over 100 years with its own message", () => {
+    for (const [field, value] of [
+      ["amortizationYears", 101],
+      ["amortizationMonths", 1201],
+    ] as const) {
+      const result = assetDetailsSchema.safeParse({ ...defaults(), [field]: value });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const messages = result.error.issues
+          .filter((issue) => issue.path[0] === field)
+          .map((issue) => issue.message);
+        expect(messages[0]).toBe("asset:loanActions.validation.term_too_long");
+      }
+    }
+  });
+
   it("sends renewal maturity with the schedule, and none once cleared", () => {
     const values = assetDetailsSchema.parse({
       ...defaults(),
@@ -214,4 +242,20 @@ describe("the paid from account", () => {
     const values = { ...liability(), automaticLoan: false, paymentAccountId: "chequing" };
     expect(liabilityLoanSetup(values).schedule).toBeUndefined();
   });
+});
+
+it("lists an unavailable linked balance without an amount, but keeps a recorded zero", () => {
+  const holding = {
+    id: "loan",
+    name: "Manual loan",
+    kind: "liability",
+    currency: "USD",
+    marketValue: "0",
+    loan: { balanceSource: null },
+  } as AlternativeAssetHolding;
+  expect(toLinkedLiability(holding)).toEqual({ id: "loan", name: "Manual loan" });
+  expect(
+    toLinkedLiability({ ...holding, loan: { ...holding.loan!, balanceSource: "recorded" } }),
+  ).toEqual({ id: "loan", name: "Manual loan", balance: "0" });
+  expect(toLinkedLiability({ ...holding, loan: undefined }).balance).toBe("0");
 });

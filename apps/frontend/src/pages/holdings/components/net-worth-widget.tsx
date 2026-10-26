@@ -100,8 +100,8 @@ const NetWorthWidgetError = ({ error, compact = false }: { error: Error; compact
   return (
     <Card className={cn("p-4", compact && "p-3")}>
       <div className="flex items-start gap-3">
-        <div className="bg-destructive/10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
-          <Icons.AlertTriangle className="text-destructive h-4 w-4" />
+        <div className="text-destructive-subtle-foreground bg-current/15 flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
+          <Icons.AlertTriangle className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-destructive text-sm font-medium">
@@ -169,21 +169,21 @@ export const NetWorthWidget = ({
 
   const [isBreakdownOpen, setIsBreakdownOpen] = useState(false);
 
-  // Parse numeric values from the response (stored as strings for precision)
+  // Totals and labelled breakdown rows from the response
   const parsedValues = useMemo(() => {
     if (!netWorthData) return null;
 
     return {
-      netWorth: parseFloat(netWorthData.netWorth) || 0,
-      totalAssets: parseFloat(netWorthData.assets.total) || 0,
-      totalLiabilities: parseFloat(netWorthData.liabilities.total) || 0,
+      netWorth: netWorthData.netWorth,
+      totalAssets: netWorthData.assets.total,
+      totalLiabilities: netWorthData.liabilities.total,
       assetsBreakdown: netWorthData.assets.breakdown.map((item) => ({
         label: getNetWorthCategoryLabel(t, item.category, item.name),
-        value: parseFloat(item.value) || 0,
+        value: item.value,
       })),
       liabilitiesBreakdown: netWorthData.liabilities.breakdown.map((item) => ({
         label: item.name,
-        value: parseFloat(item.value) || 0,
+        value: item.value,
         isDebt: true,
       })),
     };
@@ -233,7 +233,7 @@ export const NetWorthWidget = ({
           <span
             className={cn(
               "text-muted-foreground font-medium uppercase tracking-wider",
-              compact ? "text-[10px]" : "text-xs",
+              compact ? "text-2xs" : "text-xs",
             )}
           >
             {t("holdings:net_worth")}
@@ -242,12 +242,10 @@ export const NetWorthWidget = ({
           {hasStaleValuations && (
             <TooltipProvider>
               <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center gap-1">
-                    <Icons.AlertCircle className="text-warning h-4 w-4" />
-                  </div>
+                <TooltipTrigger render={<div className="flex items-center gap-1" />}>
+                  <Icons.AlertCircle className="text-warning h-4 w-4" />
                 </TooltipTrigger>
-                <TooltipContent side="left" className="max-w-[250px]">
+                <TooltipContent side="inline-start" className="max-w-62.5">
                   <p className="text-sm">
                     {t("holdings:stale_valuations_warning")}
                     {netWorthData?.oldestValuationDate && (
@@ -260,7 +258,7 @@ export const NetWorthWidget = ({
                     )}
                   </p>
                   {netWorthData && netWorthData.staleAssets.length > 0 && (
-                    <p className="text-muted-foreground mt-1 text-xs">
+                    <p className="text-background/70 mt-1 text-xs">
                       {t("holdings:assets_need_valuations", {
                         count: netWorthData.staleAssets.length,
                       })}
@@ -288,7 +286,7 @@ export const NetWorthWidget = ({
             <span
               className={cn(
                 "text-muted-foreground font-medium uppercase",
-                compact ? "text-[9px]" : "text-[10px]",
+                compact ? "text-2xs" : "text-2xs",
               )}
             >
               {t("holdings:summary_assets")}
@@ -302,7 +300,7 @@ export const NetWorthWidget = ({
             <span
               className={cn(
                 "text-muted-foreground font-medium uppercase",
-                compact ? "text-[9px]" : "text-[10px]",
+                compact ? "text-2xs" : "text-2xs",
               )}
             >
               {t("holdings:summary_debts")}
@@ -316,26 +314,25 @@ export const NetWorthWidget = ({
         {/* Optional breakdown by category */}
         {showBreakdown && hasBreakdownData && (
           <Collapsible open={isBreakdownOpen} onOpenChange={setIsBreakdownOpen}>
-            <CollapsibleTrigger asChild>
-              <button
-                type="button"
-                className="hover:bg-muted/50 flex w-full items-center justify-between rounded-md py-2 transition-colors"
-              >
-                <span
-                  className={cn(
-                    "text-muted-foreground font-medium",
-                    compact ? "text-xs" : "text-sm",
-                  )}
-                >
-                  {t("holdings:category_breakdown")}
-                </span>
-                <Icons.ChevronDown
-                  className={cn(
-                    "text-muted-foreground h-4 w-4 shrink-0 transition-transform duration-200",
-                    isBreakdownOpen && "rotate-180",
-                  )}
+            <CollapsibleTrigger
+              render={
+                <button
+                  type="button"
+                  className="hover:bg-muted/50 flex w-full items-center justify-between rounded-md py-2 transition-colors"
                 />
-              </button>
+              }
+            >
+              <span
+                className={cn("text-muted-foreground font-medium", compact ? "text-xs" : "text-sm")}
+              >
+                {t("holdings:category_breakdown")}
+              </span>
+              <Icons.ChevronDown
+                className={cn(
+                  "text-muted-foreground h-4 w-4 shrink-0 transition-transform duration-200",
+                  isBreakdownOpen && "rotate-180",
+                )}
+              />
             </CollapsibleTrigger>
             <CollapsibleContent>
               <div className="border-border/50 divide-border/50 divide-y border-t pt-1">

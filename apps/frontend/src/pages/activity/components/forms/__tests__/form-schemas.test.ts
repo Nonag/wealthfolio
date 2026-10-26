@@ -803,7 +803,7 @@ describe("Form Schemas Validation", () => {
         }
       });
 
-      it("fails when source and destination accounts are the same", () => {
+      it("fails when source and destination accounts and currencies are the same", () => {
         const sameAccount = {
           isExternal: false,
           fromAccountId: "acc-123",
@@ -812,13 +812,16 @@ describe("Form Schemas Validation", () => {
           transferMode: "cash",
           amount: 1000,
           currency: "USD",
+          sourceCurrency: "USD",
+          destinationCurrency: "USD",
         };
 
         const result = transferFormSchema.safeParse(sameAccount);
         expect(result.success).toBe(false);
         if (!result.success) {
           const refinementError = result.error.issues.find(
-            (issue) => issue.path.includes("toAccountId") && issue.message.includes("different"),
+            (issue) =>
+              issue.path.includes("destinationCurrency") && issue.message.includes("different"),
           );
           expect(refinementError).toBeDefined();
         }
@@ -1706,6 +1709,20 @@ describe("Form Schemas Validation", () => {
           activityType,
           activityDate: new Date(),
           amount: 0,
+          currency: "USD",
+        });
+
+        expect(result.success).toBe(true);
+      }
+    });
+
+    it("accepts activity date strings with or without seconds", () => {
+      for (const activityDate of ["2024-03-04T12:00Z", "2024-03-04T12:00:00.000Z"]) {
+        const result = newActivitySchema.safeParse({
+          accountId: "acc-123",
+          activityType: "DEPOSIT",
+          activityDate,
+          amount: 10,
           currency: "USD",
         });
 

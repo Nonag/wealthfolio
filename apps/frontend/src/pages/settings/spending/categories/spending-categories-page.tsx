@@ -5,13 +5,18 @@ import { toast } from "sonner";
 
 import {
   Button,
-  EmptyPlaceholder,
   Icons,
   Skeleton,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
 } from "@wealthfolio/ui";
 import {
   useCreateCategory,
@@ -24,6 +29,7 @@ import type { TaxonomyCategory } from "@/lib/types";
 import { CategoryEditModal } from "@/features/spending/components/category-edit-modal";
 import { CategoryItem, type CategoryNode } from "@/features/spending/components/category-item";
 import type { CategoryFormValues } from "@/features/spending/components/category-form";
+import { useBudget } from "@/features/spending/hooks/use-budget";
 import {
   useSpendingSettings,
   useSpendingSettingsMutation,
@@ -59,6 +65,7 @@ export default function SpendingCategoriesPage() {
   const spending = useTaxonomy(SPENDING_TAXONOMY);
   const income = useTaxonomy(INCOME_TAXONOMY);
   const savings = useTaxonomy(SAVINGS_TAXONOMY);
+  const budget = useBudget();
   const createCategory = useCreateCategory();
   const updateCategory = useUpdateCategory();
   const deleteCategory = useDeleteCategory();
@@ -113,6 +120,30 @@ export default function SpendingCategoriesPage() {
         ? INCOME_TAXONOMY
         : SAVINGS_TAXONOMY;
 
+  // Only leaf categories can move: the tree is two levels deep, so a category
+  // with subcategories can't sit under another one.
+  const selectedParentOptions = useMemo(() => {
+    if (!selectedCategory || selectedCategory.children?.length) return undefined;
+    const tree =
+      selectedCategory.taxonomyId === SPENDING_TAXONOMY
+        ? expenseTree
+        : selectedCategory.taxonomyId === INCOME_TAXONOMY
+          ? incomeTree
+          : savingsTree;
+    return tree.filter((c) => c.id !== selectedCategory.id);
+  }, [selectedCategory, expenseTree, incomeTree, savingsTree]);
+
+  // Budget targets only apply to top-level categories, so moving one with a
+  // target would silently drop that target from the budget.
+  const selectedParentLocked =
+    !!selectedCategory &&
+    !selectedCategory.parentId &&
+    !!budget.data?.state.targets.some(
+      (target) =>
+        target.taxonomyId === selectedCategory.taxonomyId &&
+        target.categoryId === selectedCategory.id,
+    );
+
   if (!settingsLoading && !isEnabled) {
     return <Navigate to="/settings/spending" replace />;
   }
@@ -136,15 +167,16 @@ export default function SpendingCategoriesPage() {
     setVisibleModal(true);
   };
 
-  const handleDeleteCategory = (category: CategoryNode) => {
-    deleteCategory.mutate(
-      { taxonomyId: category.taxonomyId, categoryId: category.id },
-      {
-        onSuccess: () =>
-          toast.success(t("settings:spending.categories.deleted", { name: category.name })),
-        onError: () => toast.error(t("settings:spending.categories.delete_error")),
-      },
-    );
+  const handleDeleteCategory = async (category: CategoryNode) => {
+    try {
+      await deleteCategory.mutateAsync({
+        taxonomyId: category.taxonomyId,
+        categoryId: category.id,
+      });
+      toast.success(t("settings:spending.categories.deleted", { name: category.name }));
+    } catch {
+      toast.error(t("settings:spending.categories.delete_error"));
+    }
   };
 
   const slugify = (s: string) =>
@@ -170,11 +202,25 @@ export default function SpendingCategoriesPage() {
             : excludedCategoryIds.filter((id) => id !== selectedCategory.id);
           await settingsMutation.mutateAsync({ excludedCategoryIds: nextIds });
         }
+        const parentId =
+          values.parentId === undefined ? (selectedCategory.parentId ?? null) : values.parentId;
+        const parentChanged = parentId !== (selectedCategory.parentId ?? null);
+        const siblings = (
+          selectedCategory.taxonomyId === SPENDING_TAXONOMY
+            ? spending.data?.categories
+            : selectedCategory.taxonomyId === INCOME_TAXONOMY
+              ? income.data?.categories
+              : savings.data?.categories
+        )?.filter((c) => (c.parentId ?? null) === parentId);
         await updateCategory.mutateAsync({
           ...selectedCategory,
           name: values.name,
           color: values.color ?? selectedCategory.color,
           icon: values.icon ?? null,
+          parentId,
+          sortOrder: parentChanged
+            ? Math.max(-1, ...(siblings ?? []).map((c) => c.sortOrder)) + 1
+            : selectedCategory.sortOrder,
         });
         toast.success(t("settings:spending.categories.updated"));
         setVisibleModal(false);
@@ -183,8 +229,8 @@ export default function SpendingCategoriesPage() {
       }
     } else {
       const taxonomyId = parentCategory ? parentCategory.taxonomyId : activeTaxonomyId;
-      createCategory.mutate(
-        {
+      try {
+        await createCategory.mutateAsync({
           taxonomyId,
           parentId: parentCategory?.id ?? null,
           name: values.name,
@@ -192,15 +238,12 @@ export default function SpendingCategoriesPage() {
           color: values.color ?? "#808080",
           sortOrder: 999,
           icon: values.icon ?? null,
-        },
-        {
-          onSuccess: () => {
-            toast.success(t("settings:spending.categories.created"));
-            setVisibleModal(false);
-          },
-          onError: () => toast.error(t("settings:spending.categories.create_error")),
-        },
-      );
+        });
+        toast.success(t("settings:spending.categories.created"));
+        setVisibleModal(false);
+      } catch {
+        toast.error(t("settings:spending.categories.create_error"));
+      }
     }
   };
 
@@ -249,7 +292,7 @@ export default function SpendingCategoriesPage() {
             <Icons.Plus className="h-3.5 w-3.5" />
           </Button>
           <Button size="sm" className="hidden sm:inline-flex" onClick={handleAddCategory}>
-            <Icons.Plus className="mr-2 h-3.5 w-3.5" />
+            <Icons.Plus className="me-2 h-3.5 w-3.5" />
             {t("settings:spending.categories.add")}
           </Button>
         </SettingsHeader>
@@ -261,19 +304,23 @@ export default function SpendingCategoriesPage() {
             <Skeleton className="h-12 w-full" />
           </div>
         ) : total === 0 ? (
-          <EmptyPlaceholder>
-            <EmptyPlaceholder.Icon name="Tag" />
-            <EmptyPlaceholder.Title>
-              {t("settings:spending.categories.empty_title")}
-            </EmptyPlaceholder.Title>
-            <EmptyPlaceholder.Description>
-              {t("settings:spending.categories.empty_description")}
-            </EmptyPlaceholder.Description>
-            <Button onClick={handleAddCategory}>
-              <Icons.Plus className="mr-2 h-4 w-4" />
-              {t("settings:spending.categories.add")}
-            </Button>
-          </EmptyPlaceholder>
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <Icons.Tag />
+              </EmptyMedia>
+              <EmptyTitle>{t("settings:spending.categories.empty_title")}</EmptyTitle>
+              <EmptyDescription>
+                {t("settings:spending.categories.empty_description")}
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button onClick={handleAddCategory}>
+                <Icons.Plus className="me-2 h-4 w-4" />
+                {t("settings:spending.categories.add")}
+              </Button>
+            </EmptyContent>
+          </Empty>
         ) : (
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
             <TabsList className="grid w-full max-w-md grid-cols-3">
@@ -312,6 +359,8 @@ export default function SpendingCategoriesPage() {
         showExcludeToggle={!!selectedCategory && selectedCategory.taxonomyId === SPENDING_TAXONOMY}
         initialExcluded={!!selectedCategory && excludedIds.has(selectedCategory.id)}
         parentExcluded={selectedParentExcluded}
+        parentOptions={selectedParentOptions}
+        parentLocked={selectedParentLocked}
       />
     </>
   );

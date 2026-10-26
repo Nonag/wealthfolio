@@ -20,6 +20,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Spinner,
 } from "@wealthfolio/ui";
 
 import type { CategorizationRule, RuleAmountOp, RuleMatchType } from "../types/rule";
@@ -80,7 +81,10 @@ export const buildRuleFormSchema = (t: Translate) =>
       amountOp: z.enum(["", "eq", "gt", "gte", "lt", "lte", "between"]),
       amountValue: z.string(),
       amountValue2: z.string(),
-      priority: z.coerce.number().int().min(0),
+      priority: z.coerce
+        .number()
+        .int(t("spending:rules.priorityInvalid"))
+        .min(0, t("spending:rules.priorityInvalid")),
       accountId: z.string().nullable(),
     })
     .refine((data) => data.categoryId || data.activityType, {
@@ -278,7 +282,11 @@ export function RuleForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>{t("spending:rules.matchType")}</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <Select
+                items={MATCH_TYPE_OPTIONS}
+                onValueChange={field.onChange}
+                defaultValue={field.value}
+              >
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder={t("spending:rules.selectMatchType")} />
@@ -329,6 +337,10 @@ export function RuleForm({
               <FormItem>
                 <FormLabel>{t("spending:rules.activityType")}</FormLabel>
                 <Select
+                  items={[
+                    { value: NONE, label: t("spending:rules.none") },
+                    ...ACTIVITY_TYPE_OPTIONS,
+                  ]}
                   onValueChange={(val) => field.onChange(val === NONE ? "" : val)}
                   value={field.value || ""}
                 >
@@ -403,7 +415,7 @@ export function RuleForm({
                             </span>
                           )}
                           <Icons.ChevronDown
-                            className="ml-2 h-4 w-4 shrink-0 opacity-50"
+                            className="ms-2 h-4 w-4 shrink-0 opacity-50"
                             aria-hidden="true"
                           />
                         </button>
@@ -431,6 +443,10 @@ export function RuleForm({
               render={({ field }) => (
                 <FormItem>
                   <Select
+                    items={[
+                      { value: NONE, label: t("spending:rules.amountAnyAmount") },
+                      ...AMOUNT_OP_OPTIONS,
+                    ]}
                     onValueChange={(val) => field.onChange(val === NONE ? "" : val)}
                     value={field.value || NONE}
                   >
@@ -516,6 +532,10 @@ export function RuleForm({
             <FormItem>
               <FormLabel>{t("spending:rules.scopeLabel")}</FormLabel>
               <Select
+                items={[
+                  { value: ALL_ACCOUNTS, label: t("common:component.all_accounts") },
+                  ...scopeOptions.map((account) => ({ value: account.id, label: account.name })),
+                ]}
                 onValueChange={(val) => field.onChange(val === ALL_ACCOUNTS ? null : val)}
                 value={(field.value as string | null) ?? ALL_ACCOUNTS}
               >
@@ -561,7 +581,7 @@ export function RuleForm({
           <Button type="submit" disabled={isLoading}>
             {isLoading ? (
               <>
-                <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
+                <Spinner className="me-2 h-4 w-4" />
                 {t("spending:common.saving")}
               </>
             ) : rule ? (

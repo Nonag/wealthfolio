@@ -90,8 +90,8 @@ interface IntervalSelectorProps {
   className?: string;
   isLoading?: boolean;
   defaultValue?: TimePeriod;
-  /** Controlled selection; the parent owns persistence when provided. */
-  value?: TimePeriod;
+  /** Controlled selection; the parent owns persistence when provided. Null highlights no period. */
+  value?: TimePeriod | null;
   /** LocalStorage key to persist selection. When provided, selection is persisted. */
   storageKey?: string;
   /** Optional callback for haptic feedback */
@@ -115,7 +115,7 @@ const IntervalSelector: React.FC<IntervalSelectorProps> = ({
   );
   const [localValue, setLocalValue] = useState<TimePeriod>(defaultValue);
 
-  const currentValue = value ?? (storageKey ? persistedValue : localValue);
+  const currentValue = value !== undefined ? value : storageKey ? persistedValue : localValue;
 
   const handleValueChange = useCallback(
     (nextValue: TimePeriod) => {
@@ -143,7 +143,9 @@ const IntervalSelector: React.FC<IntervalSelectorProps> = ({
   }));
 
   return (
-    <div className={cn("pointer-events-none relative w-full min-w-0", className)}>
+    // data-no-swipe-drag: on a swipe page, a sideways drag scrolls the intervals instead of
+    // switching the page's view.
+    <div className={cn("pointer-events-none relative w-full min-w-0", className)} data-no-swipe-drag>
       <div
         className={cn(
           "pointer-events-none relative z-30 flex w-full justify-center overflow-x-auto overflow-y-hidden",

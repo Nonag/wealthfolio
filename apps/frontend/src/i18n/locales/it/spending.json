@@ -21,6 +21,9 @@
     "nameRequired": "Il nome è obbligatorio",
     "namePlaceholder": "Nome categoria",
     "icon": "Icona",
+    "parent": "Categoria principale",
+    "topLevel": "Nessuna (livello superiore)",
+    "parentLockedByBudget": "Rimuovi prima gli obiettivi di budget di questa categoria. I budget valgono solo per le categorie di livello superiore.",
     "color": "Colore",
     "hex": "Hex",
     "create": "Crea categoria",
@@ -106,6 +109,7 @@
     "selectCategory": "Seleziona una categoria",
     "priorityLabel": "Priorità",
     "priorityHint": "Le regole con priorità più alta vengono controllate per prime (0-100).",
+    "priorityInvalid": "La priorità deve essere un numero intero maggiore o uguale a 0",
     "updateRule": "Aggiorna regola",
     "createRule": "Crea regola",
     "scopeLabel": "Si applica a",
@@ -785,19 +789,29 @@
     "title": "Flusso di denaro",
     "subtitle": "Da dove sono arrivati i tuoi soldi e dove sono andati per {{period}}.",
     "focusSubtitle": "Tutte le categorie per {{period}}.",
+    "focusSubcategoriesSubtitle": "Tutte le sottocategorie per {{period}}.",
     "back": "Tutti i flussi",
+    "backTo": "Torna a {{name}}",
     "chartLabel": "Diagramma del flusso di denaro. Usa le frecce per spostarti tra i flussi.",
     "nodeAria": "{{name}}, {{amount}}",
+    "nodeActionAria": "{{name}}, {{amount}}. {{action}}",
     "shareOfIncome": "{{pct}} delle entrate",
     "shareOfTotal": "{{pct}} del totale",
     "clickTransactions": "Fai clic per vedere le transazioni",
     "clickCategories": "Fai clic per vedere tutte le categorie",
+    "clickSubcategories": "Fai clic per vedere le sottocategorie",
+    "action": {
+      "categories": "Mostra tutte le categorie",
+      "subcategories": "Mostra le sottocategorie",
+      "transactions": "Vedi le transazioni"
+    },
     "node": {
       "total": "Totale",
       "shortfall": "Disavanzo",
       "refunds": "Rimborsi netti",
       "surplus": "Residuo",
-      "uncategorizedIncome": "Entrate non categorizzate"
+      "uncategorizedIncome": "Entrate non categorizzate",
+      "netSpending": "Spesa netta"
     },
     "hint": {
       "total": "Denaro in entrata più rimborsi netti ed eventuale disavanzo. Sempre uguale al denaro in uscita.",
@@ -806,9 +820,12 @@
       "refunds": "Categorie in cui i rimborsi hanno superato le spese.",
       "saved": "Trasferito su conti di risparmio e investimento.",
       "surplus": "Entrato, ma non speso né accantonato.",
-      "uncategorized": "Spese che non hanno ancora una categoria."
+      "uncategorized": "Spese che non hanno ancora una categoria.",
+      "net": "Quanto è costata questa categoria dopo i rimborsi.",
+      "direct": "Assegnato alla categoria stessa, non a una sottocategoria."
     },
-    "groupRefunds": "Prima di sottrarre {{amount}} di rimborsi netti."
+    "groupRefunds": "Prima di sottrarre {{amount}} di rimborsi netti.",
+    "categoryRefunds": "Prima di sottrarre {{refunds}} di rimborsi netti. Spesa netta: {{net}}."
   },
   "budgetChart": {
     "overBudget": "Budget superato",
@@ -1015,6 +1032,7 @@
     "deleteGroupWithCategories_many": "Le sue {{count}} categorie e i relativi budget verranno spostati in «Altro». I margini di gruppo verranno sommati per tutti i mesi. Questa operazione non può essere annullata.",
     "deleteGroupWithCategories_other": "Le sue {{count}} categorie e i relativi budget verranno spostati in «Altro». I margini di gruppo verranno sommati per tutti i mesi. Questa operazione non può essere annullata.",
     "deleteGroupRolloverBlocked": "Questo gruppo non può essere eliminato perché ha un'impostazione di riporto salvata, anche se il riporto è disattivato.",
+    "cannotUndo": "Questo non pu├▓ essere annullato.",
     "deleting": "Eliminazione...",
     "addCategory": "Aggiungi categoria",
     "noOtherCategories": "Nessun'altra categoria disponibile. Creane una in",
@@ -1075,6 +1093,7 @@
     "addSource_other": "Aggiungi fonte ({{count}} disponibili)",
     "overridesTitle_one": "Eccezione · {{count}}",
     "overridesTitle_many": "Eccezioni · {{count}}",
-    "overridesTitle_other": "Eccezioni · {{count}}"
+    "overridesTitle_other": "Eccezioni · {{count}}",
+    "sourceMonth": "Mese di origine"
   }
 }

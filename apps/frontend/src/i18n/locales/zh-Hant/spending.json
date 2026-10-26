@@ -21,6 +21,9 @@
     "nameRequired": "名稱為必填",
     "namePlaceholder": "類別名稱",
     "icon": "圖示",
+    "parent": "父類別",
+    "topLevel": "無（頂層）",
+    "parentLockedByBudget": "移動前請先刪除此類別的預算目標。預算僅適用於頂層類別。",
     "color": "顏色",
     "hex": "十六進位",
     "create": "建立類別",
@@ -105,6 +108,7 @@
     "selectCategory": "選取類別",
     "priorityLabel": "優先順序",
     "priorityHint": "會先檢查優先順序較高的規則（0-100）。",
+    "priorityInvalid": "優先順序必須是大於或等於 0 的整數",
     "updateRule": "更新規則",
     "createRule": "建立規則",
     "scopeLabel": "適用於",
@@ -743,19 +747,29 @@
     "title": "資金流向",
     "subtitle": "{{period}} 的資金來源與去向。",
     "focusSubtitle": "{{period}} 的所有類別。",
+    "focusSubcategoriesSubtitle": "{{period}} 的所有子類別。",
     "back": "全部流向",
+    "backTo": "返回{{name}}",
     "chartLabel": "資金流向圖。使用方向鍵在各項之間移動。",
     "nodeAria": "{{name}}，{{amount}}",
+    "nodeActionAria": "{{name}}，{{amount}}。{{action}}",
     "shareOfIncome": "佔收入的 {{pct}}",
     "shareOfTotal": "佔總額的 {{pct}}",
     "clickTransactions": "點擊查看交易",
     "clickCategories": "點擊查看所有類別",
+    "clickSubcategories": "點擊查看子類別",
+    "action": {
+      "categories": "查看所有類別",
+      "subcategories": "查看子類別",
+      "transactions": "查看交易"
+    },
     "node": {
       "total": "總額",
       "shortfall": "缺口",
       "refunds": "淨退款",
       "surplus": "剩餘",
-      "uncategorizedIncome": "未歸類收入"
+      "uncategorizedIncome": "未歸類收入",
+      "netSpending": "淨支出"
     },
     "hint": {
       "total": "流入加上淨退款和任何缺口，始終等於流出。",
@@ -764,9 +778,12 @@
       "refunds": "退款超過支出的類別。",
       "saved": "轉入儲蓄和投資帳戶的資金。",
       "surplus": "已流入但未支出或預留的資金。",
-      "uncategorized": "尚未歸類的支出。"
+      "uncategorized": "尚未歸類的支出。",
+      "net": "扣除退款後該類別的花費。",
+      "direct": "直接歸入該類別本身，而非子類別。"
     },
-    "groupRefunds": "未扣除 {{amount}} 淨退款。"
+    "groupRefunds": "未扣除 {{amount}} 淨退款。",
+    "categoryRefunds": "未扣除 {{refunds}} 淨退款。淨支出：{{net}}。"
   },
   "budgetChart": {
     "overBudget": "超出預算",
@@ -960,6 +977,7 @@
     "deleteGroupWithCategories_one": "其中 {{count}} 個類別及其預算會移至「其他」群組。所有月份的群組緩衝金額都會合併加總。此操作無法復原。",
     "deleteGroupWithCategories_other": "其中 {{count}} 個類別及其預算會移至「其他」群組。所有月份的群組緩衝金額都會合併加總。此操作無法復原。",
     "deleteGroupRolloverBlocked": "此群組有已儲存的結轉設定，因此即使結轉已關閉，也無法刪除此群組。",
+    "cannotUndo": "µ¡ñµôìõ¢£þäíµ│òÕ¥®ÕÄƒÒÇé",
     "deleting": "正在刪除……",
     "addCategory": "新增類別",
     "noOtherCategories": "沒有其他可用的類別。請在此處建立一個：",
@@ -1018,6 +1036,7 @@
     "addSource_other": "新增來源（{{count}} 個可用）",
     "overridesTitle_other": "自訂設定 · {{count}}",
     "addSource_one": "新增來源（{{count}} 個可用）",
-    "overridesTitle_one": "覆寫 · {{count}}"
+    "overridesTitle_one": "覆寫 · {{count}}",
+    "sourceMonth": "來源月份"
   }
 }

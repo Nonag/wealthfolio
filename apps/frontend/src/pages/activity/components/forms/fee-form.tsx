@@ -1,5 +1,6 @@
 import { useSettings } from "@/hooks/use-settings";
 import { ActivityType } from "@/lib/constants";
+import { invalidTypeError, requiredError } from "@/lib/zod-errors";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@wealthfolio/ui/components/ui/button";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
@@ -19,6 +20,7 @@ import {
   NotesInput,
   type AccountSelectOption,
 } from "./fields";
+import { Spinner } from "@wealthfolio/ui";
 
 // Translated message helper (see buy-form for rationale).
 type MsgFn = TFunction | undefined;
@@ -32,12 +34,13 @@ export const createFeeFormSchema = (t?: TFunction) =>
       .string()
       .min(1, { message: msg(t, "activity:form.err_select_account", "Please select an account.") }),
     activityDate: z.date({
-      required_error: msg(t, "activity:form.err_select_date", "Please select a date."),
+      error: requiredError(msg(t, "activity:form.err_select_date", "Please select a date.")),
     }),
     amount: z.coerce
       .number({
-        required_error: msg(t, "activity:form.err_enter_amount", "Please enter an amount."),
-        invalid_type_error: msg(t, "activity:form.err_amount_number", "Amount must be a number."),
+        error: invalidTypeError(
+          msg(t, "activity:form.err_amount_number", "Amount must be a number."),
+        ),
       })
       .min(0, {
         message: msg(t, "activity:form.err_amount_non_negative", "Amount must be non-negative."),
@@ -45,7 +48,7 @@ export const createFeeFormSchema = (t?: TFunction) =>
     comment: z.string().optional().nullable(),
     // Advanced options
     currency: z
-      .string()
+      .string({ error: msg(t, "activity:form.err_currency_required", "Currency is required.") })
       .min(1, { message: msg(t, "activity:form.err_currency_required", "Currency is required.") }),
     subtype: z.string().optional().nullable(),
     // Only carry an explicit reset; otherwise retain the stored rate on updates.
@@ -154,11 +157,11 @@ export function FeeForm({
             </Button>
           )}
           <Button type="submit" disabled={isLoading}>
-            {isLoading && <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />}
+            {isLoading && <Spinner className="me-2 h-4 w-4" />}
             {isEditing ? (
-              <Icons.Check className="mr-2 h-4 w-4" />
+              <Icons.Check className="me-2 h-4 w-4" />
             ) : (
-              <Icons.Plus className="mr-2 h-4 w-4" />
+              <Icons.Plus className="me-2 h-4 w-4" />
             )}
             {isEditing ? t("activity:form.button_update") : t("activity:form.button_add_fee")}
           </Button>
