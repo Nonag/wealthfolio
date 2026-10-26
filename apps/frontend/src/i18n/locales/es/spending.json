@@ -1032,7 +1032,6 @@
     "deleteGroupWithCategories_other": "Sus {{count}} categorías y sus presupuestos se moverán a «Otros». Los márgenes de grupo se sumarán para todos los meses. Esto no se puede deshacer.",
     "deleteGroupWithCategories_many": "Sus {{count}} categorías y sus presupuestos se moverán a «Otros». Los márgenes de grupo se sumarán para todos los meses. Esto no se puede deshacer.",
     "deleteGroupRolloverBlocked": "Este grupo no se puede eliminar porque tiene un ajuste de traspaso guardado, aunque el traspaso esté desactivado.",
-    "cannotUndo": "Esto no se puede deshacer.",
     "deleting": "Eliminando...",
     "addCategory": "Añadir categoría",
     "noOtherCategories": "No hay otras categorías disponibles. Crea una en",

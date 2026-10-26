@@ -968,7 +968,6 @@
     "deleteGroupWithCategories_one": "카테고리 {{count}}개와 해당 예산이 ‘기타’ 그룹으로 이동됩니다. 모든 달의 그룹 버퍼 금액이 합산됩니다. 이 작업은 되돌릴 수 없습니다.",
     "deleteGroupWithCategories_other": "카테고리 {{count}}개와 해당 예산이 ‘기타’ 그룹으로 이동됩니다. 모든 달의 그룹 버퍼 금액이 합산됩니다. 이 작업은 되돌릴 수 없습니다.",
     "deleteGroupRolloverBlocked": "이 그룹에는 저장된 이월 설정이 있어 이월이 꺼져 있어도 삭제할 수 없습니다.",
-    "cannotUndo": "ýØ┤ ý×æýùàýØÇ ÙÉÿÙÅîÙª┤ ýêÿ ýùåýèÁÙïêÙïñ.",
     "deleting": "삭제 중...",
     "addCategory": "카테고리 추가",
     "noOtherCategories": "사용 가능한 다른 카테고리가 없습니다. 여기서 새로 만드세요",

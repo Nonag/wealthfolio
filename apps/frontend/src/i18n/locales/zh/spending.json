@@ -968,7 +968,6 @@
     "deleteGroupWithCategories_one": "其 {{count}} 个类别及其预算将移至“其他”分组。所有月份的分组缓冲金额都将合并相加。此操作无法撤销。",
     "deleteGroupWithCategories_other": "其 {{count}} 个类别及其预算将移至“其他”分组。所有月份的分组缓冲金额都将合并相加。此操作无法撤销。",
     "deleteGroupRolloverBlocked": "此分组有已保存的结转设置，因此即使结转已关闭，也无法删除此分组。",
-    "cannotUndo": "µ¡ñµôìõ¢£µùáµ│òµÆñÚöÇÒÇé",
     "deleting": "正在删除……",
     "addCategory": "添加类别",
     "noOtherCategories": "没有其他可用的类别。请在此处创建一个：",

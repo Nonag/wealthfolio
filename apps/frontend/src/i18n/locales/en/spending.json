@@ -977,7 +977,6 @@
     "deleteGroupWithCategories_one": "Its {{count}} category and its budget will move to “Other”. Group buffers will be combined for all months. This cannot be undone.",
     "deleteGroupWithCategories_other": "Its {{count}} categories and their budgets will move to “Other”. Group buffers will be combined for all months. This cannot be undone.",
     "deleteGroupRolloverBlocked": "This group cannot be deleted because it has a saved rollover setting, even if rollover is switched off.",
-    "cannotUndo": "This can't be undone.",
     "deleting": "Deleting...",
     "addCategory": "Add category",
     "noOtherCategories": "No other categories available. Create one in",

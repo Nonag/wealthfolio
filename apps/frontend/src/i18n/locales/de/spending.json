@@ -977,7 +977,6 @@
     "deleteGroupWithCategories_one": "Ihre {{count}} Kategorie und deren Budget werden in die Gruppe „Andere“ verschoben. Die Gruppenpuffer werden für alle Monate zusammengerechnet. Dies kann nicht rückgängig gemacht werden.",
     "deleteGroupWithCategories_other": "Ihre {{count}} Kategorien und deren Budgets werden in die Gruppe „Andere“ verschoben. Die Gruppenpuffer werden für alle Monate zusammengerechnet. Dies kann nicht rückgängig gemacht werden.",
     "deleteGroupRolloverBlocked": "Diese Gruppe kann nicht gelöscht werden, da für sie eine Übertragseinstellung gespeichert ist, auch wenn der Übertrag deaktiviert ist.",
-    "cannotUndo": "Dies kann nicht r├╝ckg├ñngig gemacht werden.",
     "deleting": "Wird gelöscht...",
     "addCategory": "Kategorie hinzufügen",
     "noOtherCategories": "Keine anderen Kategorien verfügbar. Erstellen Sie eine unter",

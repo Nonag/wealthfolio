@@ -1032,7 +1032,6 @@
     "deleteGroupWithCategories_other": "Suas {{count}} categorias e seus orçamentos serão movidos para “Outros”. As margens de grupo serão somadas para todos os meses. Isso não pode ser desfeito.",
     "deleteGroupWithCategories_many": "Suas {{count}} categorias e seus orçamentos serão movidos para “Outros”. As margens de grupo serão somadas para todos os meses. Isso não pode ser desfeito.",
     "deleteGroupRolloverBlocked": "Este grupo não pode ser excluído porque tem uma configuração de transferência de saldo salva, mesmo que a transferência de saldo esteja desativada.",
-    "cannotUndo": "Isso n├úo pode ser desfeito.",
     "deleting": "Excluindo...",
     "addCategory": "Adicionar categoria",
     "noOtherCategories": "Não há outras categorias disponíveis. Crie uma em",
