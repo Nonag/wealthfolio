@@ -37,6 +37,10 @@ pub struct PresetRule {
     pub category_key: String,
     #[serde(default)]
     pub priority: i32,
+    /// Restricts the rule to one activity type (e.g. "WITHDRAWAL"), so merchant
+    /// rules skip refunds and income rules skip spending. Matches any type when omitted.
+    #[serde(default)]
+    pub activity_type: Option<String>,
 }
 
 /// Light-weight summary returned to the UI for picker rendering.
@@ -89,10 +93,13 @@ const PRESET_JSONS: &[(&str, &str)] = &[
     ("ca", include_str!("../../seeds/presets/ca.json")),
     ("gb", include_str!("../../seeds/presets/gb.json")),
     ("es", include_str!("../../seeds/presets/es.json")),
+    ("de", include_str!("../../seeds/presets/de.json")),
     ("fr", include_str!("../../seeds/presets/fr.json")),
+    ("nl", include_str!("../../seeds/presets/nl.json")),
     ("au", include_str!("../../seeds/presets/au.json")),
     ("nz", include_str!("../../seeds/presets/nz.json")),
     ("se", include_str!("../../seeds/presets/se.json")),
+    ("it", include_str!("../../seeds/presets/it.json")),
 ];
 
 /// Parse all bundled presets. Bad JSON (or schema-mismatched files) is logged
@@ -151,8 +158,13 @@ mod tests {
     use super::*;
     use crate::categorization_rules::{match_rules, CategorizationRule, RuleMatchType};
     use chrono::Utc;
+    use wealthfolio_core::activities::ActivityType;
 
     fn match_preset(preset_id: &str, notes: &str) -> Option<String> {
+        match_preset_as(preset_id, notes, "WITHDRAWAL")
+    }
+
+    fn match_preset_as(preset_id: &str, notes: &str, activity_type: &str) -> Option<String> {
         let now = Utc::now().naive_utc();
         let rules = load_preset(preset_id)
             .expect("preset should load")
@@ -166,7 +178,7 @@ mod tests {
                     .expect("preset match type should be valid"),
                 taxonomy_id: Some("spending_categories".to_string()),
                 category_id: Some(rule.category_key),
-                activity_type: None,
+                activity_type: rule.activity_type,
                 amount_op: None,
                 amount_value: None,
                 amount_value2: None,
@@ -182,7 +194,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        match_rules(&rules, notes, "WITHDRAWAL", "account", None)
+        match_rules(&rules, notes, activity_type, "account", None)
             .and_then(|matched| matched.rule.category_id.clone())
     }
 
@@ -263,8 +275,225 @@ mod tests {
     }
 
     #[test]
+    fn dutch_merchants_match_specific_categories() {
+        for (notes, category) in [
+            ("BEA, Betaalpas ALBERT HEIJN 1234,PAS123", "groceries"),
+            ("Jumbo Utrecht", "groceries"),
+            ("NS GROEP IZ NS REIZIGERS", "transport_public"),
+            ("Q-Park Nederland", "transport_parking"),
+            ("Eneco Services", "housing_utilities"),
+            ("Gemeentelijke belastingen Amsterdam", "housing_utilities"),
+            ("Zilveren Kruis Zorgverzekeringen", "health_insurance"),
+            ("Ziggo Services BV", "bills_internet"),
+            ("Thuisbezorgd.nl", "food_delivery"),
+            ("Kosten OranjePakket", "fees_bank"),
+            ("Coolblue BV", "shopping_electronics"),
+            ("Basic-Fit Nederland", "health_fitness"),
+            ("NS-Utrecht Centraal 123 UTRECHT NLD", "transport_public"),
+            ("Rabobank Hypotheken", "housing_rent"),
+            ("BENU Apotheken", "health_pharmacy"),
+            ("AH to go Schiphol", "groceries"),
+        ] {
+            assert_eq!(
+                match_preset("nl", notes).as_deref(),
+                Some(category),
+                "{notes}"
+            );
+        }
+    }
+
+    #[test]
+    fn dutch_merchants_require_complete_names() {
+        for notes in [
+            "JUMBOREE",
+            "SPARTA ROTTERDAM",
+            "TRANSACTION 123",
+            "PICNICTAFEL",
+            "HUUR FIETS",
+            "GAMMASTRALING",
+            "Example BV SCHIPHOL RIJK",
+        ] {
+            assert_eq!(match_preset("nl", notes), None, "{notes}");
+        }
+    }
+
+    #[test]
+    fn german_merchants_match_specific_categories() {
+        for (notes, category) in [
+            ("VISA REWE Markt GmbH", "groceries"),
+            ("NETTO MARKEN-DISCOUNT", "groceries"),
+            ("PENNY.Markt GmbH", "groceries"),
+            ("DB Vertrieb GmbH", "transport_public"),
+            ("Stadtwerke Muenster GmbH", "housing_utilities"),
+            (
+                "ARD ZDF Deutschlandradio Beitragsservice",
+                "housing_utilities",
+            ),
+            ("Techniker Krankenkasse", "health_insurance"),
+            ("Telekom Deutschland GmbH", "bills_phone"),
+            ("Lieferando.de", "food_delivery"),
+            ("Entgelt fuer Kontofuehrung", "fees_bank"),
+            ("dm-drogerie markt", "health_pharmacy"),
+            ("Baeckerei Mueller", "food_coffee"),
+            ("Vodafone Kabel Deutschland GmbH", "bills_internet"),
+            ("EnBW mobility+ AG", "transport_gas"),
+            ("Burger King Flughafen Muenchen", "food_restaurants"),
+            ("H&M Flughafen Frankfurt", "shopping_clothing"),
+            ("Entgelt fuer Girocard", "fees_bank"),
+        ] {
+            assert_eq!(
+                match_preset("de", notes).as_deref(),
+                Some(category),
+                "{notes}"
+            );
+        }
+    }
+
+    #[test]
+    fn german_merchants_require_complete_names() {
+        for notes in [
+            "NETTOBETRAG",
+            "Netto 123,45 EUR",
+            "PENNYWISE",
+            "OTTO MUELLER",
+            "DEPOT WERTPAPIERE",
+            "ROLLER LEIHE",
+            "REWEB DESIGN",
+            "Kiosk Flughafen Hamburg",
+            "Entgelt fuer Stellplatz",
+        ] {
+            assert_eq!(match_preset("de", notes), None, "{notes}");
+        }
+    }
+
+    #[test]
+    fn italian_merchants_match_specific_categories() {
+        for (notes, category) in [
+            ("PAGAMENTO POS ESSELUNGA MILANO", "groceries"),
+            ("Conad — PAGAMENTO CARTA 1234", "groceries"),
+            ("LIDL ITALIA 0342", "groceries"),
+            ("ENI STATION A1 SUD", "transport_gas"),
+            ("ENI PLENITUDE — BOLLETTA LUCE", "housing_utilities"),
+            ("ADDEBITO SDD ENEL ENERGIA", "housing_utilities"),
+            ("ILIAD ITALIA RICARICA", "bills_phone"),
+            ("ADDEBITO SDD TIM S.P.A.", "bills_phone"),
+            ("FASTWEB SPA FATTURA", "bills_internet"),
+            ("NETFLIX.COM", "entertainment_streaming"),
+            ("AMAZON PRIME VIDEO", "entertainment_streaming"),
+            ("AMAZON EU SARL", "shopping_online"),
+            ("GLOVO MILANO", "food_delivery"),
+            ("UBER EATS", "food_delivery"),
+            ("UBER TRIP", "transport_rideshare"),
+            ("TRENITALIA FRECCIAROSSA", "transport_public"),
+            ("ITALOTRENO MILANO", "transport_public"),
+            ("AUTOSTRADE PER L'ITALIA", "transport_parking"),
+            ("TELEPASS SPA", "transport_parking"),
+            ("FARMACIA COMUNALE 3", "health_pharmacy"),
+            ("BAR ROMA", "food_coffee"),
+            ("PIZZERIA DA MARIO", "food_restaurants"),
+            ("IKEA ITALIA RETAIL", "shopping_home"),
+            ("MEDIAWORLD ONLINE", "shopping_electronics"),
+            ("ZALANDO SE", "shopping_clothing"),
+            ("DECATHLON ITALIA", "entertainment_sports"),
+            ("RYANAIR DAC", "travel"),
+            ("BOOKING.COM HOTEL", "travel"),
+            ("AFFITTO OTTOBRE", "housing_rent"),
+            ("RATA MUTUO 10/2026", "housing_rent"),
+            ("PAGOPA COMUNE DI MILANO TARI", "fees"),
+        ] {
+            assert_eq!(
+                match_preset("it", notes).as_deref(),
+                Some(category),
+                "{notes}"
+            );
+        }
+    }
+
+    #[test]
+    fn italian_sky_wifi_outranks_streaming() {
+        for (notes, category) in [
+            ("ADDEBITO SDD SKY WIFI", "bills_internet"),
+            ("SkyWifi FATTURA", "bills_internet"),
+            ("ADDEBITO SDD SKY ITALIA", "entertainment_streaming"),
+            ("NETFLIX.COM", "entertainment_streaming"),
+            ("FASTWEB MOBILE RICARICA", "bills_phone"),
+            ("FASTWEB SPA FATTURA", "bills_internet"),
+        ] {
+            assert_eq!(
+                match_preset("it", notes).as_deref(),
+                Some(category),
+                "{notes}"
+            );
+        }
+    }
+
+    #[test]
+    fn italian_eni_gas_outranks_fuel() {
+        for (notes, category) in [
+            ("ADDEBITO SDD ENI GAS E LUCE", "housing_utilities"),
+            ("Eni Gas FATTURA", "housing_utilities"),
+            ("ENI PLENITUDE BOLLETTA LUCE", "housing_utilities"),
+            ("ENI STATION A1 SUD", "transport_gas"),
+            ("ENI GASOLIO", "transport_gas"),
+        ] {
+            assert_eq!(
+                match_preset("it", notes).as_deref(),
+                Some(category),
+                "{notes}"
+            );
+        }
+    }
+
+    #[test]
+    fn italian_rules_respect_activity_types() {
+        for (notes, activity_type, category) in [
+            ("AGENZIA ENTRATE — PAGAMENTO F24", "TAX", "fees"),
+            ("IMPOSTA DI BOLLO E/C", "TAX", "fees"),
+            ("CANONE MENSILE CONTO", "FEE", "fees_bank"),
+            ("INTERESSI DEBITORI", "FEE", "fees_interest"),
+            ("ACME SRL — STIPENDIO OTTOBRE", "DEPOSIT", "income_salary"),
+            ("INPS PENSIONE OTTOBRE", "DEPOSIT", "income_other"),
+            ("RIMBORSO IRPEF 730", "DEPOSIT", "income_tax_refund"),
+            ("AMAZON — RIMBORSO ORDINE", "DEPOSIT", "income_refunds"),
+            ("RIMBORSO SKY WIFI", "DEPOSIT", "income_refunds"),
+            ("RIMBORSO ENI GAS E LUCE", "DEPOSIT", "income_refunds"),
+            ("INTERESSI CREDITORI", "INTEREST", "income_interest"),
+        ] {
+            assert_eq!(
+                match_preset_as("it", notes, activity_type).as_deref(),
+                Some(category),
+                "{notes} ({activity_type})"
+            );
+        }
+        // Merchant rules leave money coming in alone, and income rules never
+        // file spending.
+        assert_eq!(match_preset_as("it", "CONAD", "DEPOSIT"), None);
+        for notes in ["SKY WIFI", "SKYWIFI", "ENI GAS E LUCE"] {
+            assert_eq!(match_preset_as("it", notes, "DEPOSIT"), None, "{notes}");
+        }
+        assert_eq!(match_preset("it", "ACME SRL — STIPENDIO OTTOBRE"), None);
+    }
+
+    #[test]
+    fn italian_merchants_require_complete_names() {
+        for notes in [
+            "BONIFICO A MARIO ROSSI",
+            "BONIFICO A DOTT. MARIO ROSSI",
+            "BONIFICO A TIM ROSSI",
+            "BONIFICO A ITALO BIANCHI",
+            "GIROCONTO RISPARMI",
+            "ENIGMISTICA",
+            "SPOKEN ENGLISH SCHOOL SRL",
+        ] {
+            assert_eq!(match_preset("it", notes), None, "{notes}");
+        }
+    }
+
+    #[test]
     fn bundled_presets_have_unique_keys_and_valid_regexes() {
-        for preset_id in ["us", "ca", "gb", "es", "fr", "au", "nz", "se"] {
+        for preset_id in [
+            "us", "ca", "gb", "es", "de", "fr", "nl", "au", "nz", "se", "it",
+        ] {
             let preset = load_preset(preset_id).expect("preset should load");
             assert_eq!(preset.preset_id, preset_id);
             assert!(!preset.rules.is_empty(), "preset {preset_id} has no rules");
@@ -289,6 +518,15 @@ mod tests {
                     preset.preset_id,
                     rule.key
                 );
+                if let Some(activity_type) = &rule.activity_type {
+                    assert!(
+                        activity_type.parse::<ActivityType>().is_ok(),
+                        "unknown activityType {} in preset {} rule {}",
+                        activity_type,
+                        preset.preset_id,
+                        rule.key
+                    );
+                }
                 if rule.match_type == "regex" {
                     crate::categorization_rules::compile_regex_pattern(&rule.pattern)
                         .unwrap_or_else(|err| {

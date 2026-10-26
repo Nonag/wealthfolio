@@ -7,6 +7,7 @@ import {
   MoneyInput,
   useAmountFormatting,
   useDateFormatting,
+  Spinner,
 } from "@wealthfolio/ui";
 import { Alert, AlertDescription } from "@wealthfolio/ui/components/ui/alert";
 import { Sheet, SheetDescription, SheetTitle } from "@wealthfolio/ui/components/ui/sheet";
@@ -17,8 +18,9 @@ import {
   LoanSheetFooter,
 } from "./loan-sheet-content";
 import { Label } from "@wealthfolio/ui/components/ui/label";
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useEffectOnChange } from "@/hooks/use-effect-on-change";
 import type { Quote } from "@/lib/types";
 import { formatDateISO } from "@/lib/utils";
 import { loanCalculationRequest, useLoanPayments } from "../hooks/use-loan-calculation";
@@ -44,7 +46,7 @@ export function CloseLoanDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isDateInvalid = (originationDate !== null && date < originationDate) || date > new Date();
 
-  useEffect(() => {
+  useEffectOnChange(() => {
     if (open) setDate(new Date());
   }, [open]);
 
@@ -91,7 +93,7 @@ export function CloseLoanDialog({
             onClick={handleSubmit}
             disabled={isSubmitting || isDateInvalid}
           >
-            {isSubmitting && <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />}
+            {isSubmitting && <Spinner className="me-2 h-4 w-4" />}
             {t("asset:loanActions.confirm_close")}
           </Button>
         </LoanSheetFooter>
@@ -129,7 +131,7 @@ export function RecalculateScheduleDialog({
   const [newRate, setNewRate] = useState<string>(() => String(interestRate));
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
+  useEffectOnChange(() => {
     if (open) {
       setNewRate(String(interestRate));
       setEffectiveDate(new Date());
@@ -204,7 +206,7 @@ export function RecalculateScheduleDialog({
             <span className="text-muted-foreground">
               {t("asset:loanActions.recalculate_current_balance")}
             </span>
-            <span className="text-right font-medium">
+            <span className="text-end font-medium">
               {calculation ? (
                 <AmountDisplay value={calculation.currentBalance} currency={currency} />
               ) : (
@@ -214,13 +216,13 @@ export function RecalculateScheduleDialog({
             <span className="text-muted-foreground">
               {t("asset:loanActions.remaining_payments")}
             </span>
-            <span className="text-right font-medium">
+            <span className="text-end font-medium">
               {calculation ? calculation.remainingPayments : unavailable}
             </span>
             {endDate && (
               <>
                 <span className="text-muted-foreground">{t("asset:altContent.end_date")}</span>
-                <span className="text-right font-medium">
+                <span className="text-end font-medium">
                   {endDate.toLocaleDateString(i18n.language, {
                     month: "short",
                     year: "numeric",
@@ -269,7 +271,7 @@ export function RecalculateScheduleDialog({
               newPayment <= 0
             }
           >
-            {isSubmitting && <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />}
+            {isSubmitting && <Spinner className="me-2 h-4 w-4" />}
             {t("asset:loanActions.recalculate_confirm")}
           </Button>
         </LoanSheetFooter>
@@ -284,7 +286,7 @@ interface LoanBalanceEventDialogProps {
   mode: "balance_correction" | "extra_repayment";
   currentBalance: number;
   currency: string;
-  /** Recorded balances, oldest first; a later one overrides a repayment. */
+  /** Recorded balances, oldest first; corrections replace the same day's balance. */
   confirmations?: Quote[];
   /** The "Paid from" account an extra repayment is withdrawn from. */
   paidFrom?: string;
@@ -322,8 +324,14 @@ export function LoanBalanceEventDialog({
     !isCorrection && !dateInvalid
       ? confirmations.find((quote) => quote.timestamp.slice(0, 10) >= formatDateISO(date))
       : undefined;
+  const replacedBalance =
+    isCorrection && !dateInvalid
+      ? confirmations.find((quote) => quote.timestamp.slice(0, 10) === formatDateISO(date))
+      : undefined;
 
-  useEffect(() => {
+  const warnedBalance = replacedBalance ?? overridingBalance;
+
+  useEffectOnChange(() => {
     if (!open) return;
     setDate(new Date());
     setAmount(null);
@@ -402,18 +410,23 @@ export function LoanBalanceEventDialog({
               {t("asset:loanPayments.recorded_as_withdrawal", { account: paidFrom })}
             </p>
           )}
-          {overridingBalance && (
+          {warnedBalance && (
             <Alert variant="warning">
               <Icons.AlertTriangle className="h-4 w-4" />
               <AlertDescription className="text-sm">
-                {t("asset:loanActions.repayment_before_confirmation", {
-                  amount: formatAmount(Math.abs(overridingBalance.close), currency),
-                  date: dates.formatCalendarDate(overridingBalance.timestamp.slice(0, 10), {
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  }),
-                })}
+                {t(
+                  replacedBalance
+                    ? "asset:loanActions.balance_replaces_confirmation"
+                    : "asset:loanActions.repayment_before_confirmation",
+                  {
+                    amount: formatAmount(Math.abs(warnedBalance.close), currency),
+                    date: dates.formatCalendarDate(warnedBalance.timestamp.slice(0, 10), {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    }),
+                  },
+                )}
               </AlertDescription>
             </Alert>
           )}
@@ -433,7 +446,7 @@ export function LoanBalanceEventDialog({
             {t("common:cancel")}
           </Button>
           <Button onClick={handleSubmit} disabled={invalid || isSubmitting}>
-            {isSubmitting && <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />}
+            {isSubmitting && <Spinner className="me-2 h-4 w-4" />}
             {t(
               isCorrection
                 ? "asset:loanActions.confirm_balance"

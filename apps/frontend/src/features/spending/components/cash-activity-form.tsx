@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,6 +7,7 @@ import * as z from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { useEffectOnChange } from "@/hooks/use-effect-on-change";
 import { createActivity, updateActivity } from "@/adapters";
 import { useAccounts } from "@/hooks/use-accounts";
 import { useIsMobileViewport } from "@/hooks/use-platform";
@@ -15,6 +16,7 @@ import { QueryKeys } from "@/lib/query-keys";
 import { cn } from "@/lib/utils";
 import { invalidateSpendingCaches } from "../lib/invalidation";
 import type { Account, Activity, ActivityCreate, ActivityUpdate } from "@/lib/types";
+import { invalidTypeError, requiredError } from "@/lib/zod-errors";
 
 import {
   Button,
@@ -41,6 +43,7 @@ import {
   SheetHeader,
   SheetTitle,
   Textarea,
+  Spinner,
 } from "@wealthfolio/ui";
 
 import {
@@ -85,14 +88,14 @@ function buildFormSchema(t: TFunction) {
       "INTEREST",
       "CREDIT",
     ]),
-    activityDate: z.date({ required_error: t("spending:cashForm.pickDate") }),
+    activityDate: z.date({ error: requiredError(t("spending:cashForm.pickDate")) }),
     amount: z.coerce.number().min(0, { message: t("spending:cashForm.amountNonNegative") }),
     notes: z.string().optional(),
     // Advanced options. Currency defaults to the account's, so the common case
     // never sees these; a foreign charge on a domestic card needs both.
     currency: z.string().optional(),
     fxRate: z.coerce
-      .number({ invalid_type_error: t("activity:form.err_fxrate_number") })
+      .number({ error: invalidTypeError(t("activity:form.err_fxrate_number")) })
       .positive({ message: t("activity:form.err_fxrate_positive") })
       .optional(),
     /** "<taxonomyId>:<categoryId>" or "" */
@@ -234,7 +237,7 @@ export function CashActivityForm({
   const [eventId, setEventId] = useState<string | null>(activity?.eventId ?? null);
 
   const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(formSchema) as Resolver<FormValues>,
     defaultValues: {
       accountId: activity?.accountId ?? "",
       activityType: (activity?.activityType as FormValues["activityType"]) ?? "WITHDRAWAL",
@@ -250,7 +253,7 @@ export function CashActivityForm({
     },
   });
 
-  useEffect(() => {
+  useEffectOnChange(() => {
     if (open) {
       form.reset({
         accountId: activity?.accountId ?? spendingAccounts[0]?.id ?? "",
@@ -447,7 +450,7 @@ export function CashActivityForm({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        side={isMobile ? "bottom" : "right"}
+        side={isMobile ? "bottom" : "inline-end"}
         className={cn(
           isMobile
             ? "rounded-t-4xl mx-1 flex h-[90vh] flex-col p-0"
@@ -504,7 +507,14 @@ export function CashActivityForm({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>{t("common:account")}</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                          <Select
+                            items={spendingAccounts.map((acc) => ({
+                              value: acc.id,
+                              label: `${acc.name} (${acc.currency})`,
+                            }))}
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder={t("spending:cashForm.selectAccount")} />
@@ -529,7 +539,7 @@ export function CashActivityForm({
                         name="activityType"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-lg font-semibold">
+                            <FormLabel className="text-lg font-semibold leading-none">
                               {t("spending:cashForm.selectType")}
                             </FormLabel>
                             <FormControl>
@@ -547,7 +557,7 @@ export function CashActivityForm({
                                         className={cn(
                                           "flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-all",
                                           "hover:bg-muted/50",
-                                          "peer-data-[state=checked]:border-primary peer-data-[state=checked]:bg-primary/5",
+                                          "peer-data-checked:border-primary peer-data-checked:bg-primary/5",
                                           "active:scale-[0.98]",
                                         )}
                                       >
@@ -580,7 +590,14 @@ export function CashActivityForm({
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>{t("common:type")}</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value}>
+                              <Select
+                                items={mobileTypeOptions.map(({ type, label }) => ({
+                                  value: type,
+                                  label,
+                                }))}
+                                onValueChange={field.onChange}
+                                value={field.value}
+                              >
                                 <FormControl>
                                   <SelectTrigger>
                                     <SelectValue />
@@ -634,7 +651,7 @@ export function CashActivityForm({
                       <button
                         type="button"
                         className={cn(
-                          "flex w-full items-start gap-3 rounded-lg border p-4 text-left transition-all",
+                          "flex w-full items-start gap-3 rounded-lg border p-4 text-start transition-all",
                           "hover:bg-muted/50 active:scale-[0.98]",
                           "disabled:cursor-not-allowed disabled:opacity-50",
                         )}
@@ -754,7 +771,7 @@ export function CashActivityForm({
                                         </span>
                                       )}
                                       <Icons.ChevronDown
-                                        className="ml-2 h-4 w-4 shrink-0 opacity-50"
+                                        className="ms-2 h-4 w-4 shrink-0 opacity-50"
                                         aria-hidden="true"
                                       />
                                     </button>
@@ -811,7 +828,7 @@ export function CashActivityForm({
                               );
                             })()}
                             <Icons.ChevronDown
-                              className="ml-2 h-4 w-4 shrink-0 opacity-50"
+                              className="ms-2 h-4 w-4 shrink-0 opacity-50"
                               aria-hidden="true"
                             />
                           </button>
@@ -868,31 +885,35 @@ export function CashActivityForm({
                       className="flex-1"
                       disabled={saveMutation.isPending}
                     >
-                      <Icons.ArrowLeft className="mr-2 h-4 w-4" />
+                      <Icons.ArrowLeft className="me-2 h-4 w-4 rtl:rotate-180" />
                       {t("common:back")}
                     </Button>
                   )}
 
+                  {/* Separate keys: reusing one element would turn the pressed Next into a
+                      submit button before the click's default action runs, which submits. */}
                   {currentStep < 2 && !isEditing ? (
                     <Button
+                      key="next"
                       type="button"
                       onClick={handleMobileNext}
                       className="flex-1 font-medium"
                       disabled={!watchAccountId}
                     >
                       {t("common:next")}
-                      <Icons.ArrowRight className="ml-2 h-4 w-4" />
+                      <Icons.ArrowRight className="ms-2 h-4 w-4 rtl:rotate-180" />
                     </Button>
                   ) : (
                     <Button
+                      key="submit"
                       type="submit"
                       className="flex-1 font-medium"
                       disabled={saveMutation.isPending}
                     >
                       {saveMutation.isPending ? (
-                        <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
+                        <Spinner className="me-2 h-4 w-4" />
                       ) : (
-                        <Icons.Check className="mr-2 h-4 w-4" />
+                        <Icons.Check className="me-2 h-4 w-4" />
                       )}
                       {isEditing
                         ? t("spending:cashForm.updateTransaction")
@@ -914,7 +935,7 @@ export function CashActivityForm({
                 <Button type="submit" disabled={saveMutation.isPending}>
                   {saveMutation.isPending ? (
                     <>
-                      <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
+                      <Spinner className="me-2 h-4 w-4" />
                       {t("spending:common.saving")}
                     </>
                   ) : isEditing ? (

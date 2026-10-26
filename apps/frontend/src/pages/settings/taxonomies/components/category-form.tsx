@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -23,10 +23,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
+  Spinner,
 } from "@wealthfolio/ui";
 import type { TaxonomyCategory } from "@/lib/types";
 import { useCreateCategory, useUpdateCategory, useDeleteCategory } from "@/hooks/use-taxonomies";
 import { toast } from "sonner";
+import { useEffectOnChange } from "@/hooks/use-effect-on-change";
 
 interface CategoryFormValues {
   name: string;
@@ -93,7 +95,7 @@ export function CategoryForm({
   });
 
   // Reset form when category changes
-  useEffect(() => {
+  useEffectOnChange(() => {
     form.reset({
       name: category?.name ?? "",
       key: category?.key ?? "",
@@ -104,7 +106,7 @@ export function CategoryForm({
 
   // Auto-generate key from name in create mode
   const watchName = form.watch("name");
-  useEffect(() => {
+  useEffectOnChange(() => {
     if (isCreateMode && watchName) {
       form.setValue("key", generateKey(watchName), { shouldDirty: true });
     }
@@ -172,7 +174,7 @@ export function CategoryForm({
             {isCreateMode ? t("settings:tax_new_category") : category?.name}
           </h3>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose}>
+        <Button variant="ghost" size="icon" onClick={onClose} aria-label={t("common:close")}>
           <Icons.Close className="h-4 w-4" />
         </Button>
       </div>
@@ -242,7 +244,7 @@ export function CategoryForm({
               >
                 {isPending ? (
                   <>
-                    <Icons.Loader className="mr-2 h-4 w-4 animate-spin" />
+                    <Spinner className="me-2 h-4 w-4" />
                     {isCreateMode ? t("settings:tax_creating") : t("settings:tax_saving")}
                   </>
                 ) : isCreateMode ? (
@@ -266,20 +268,22 @@ export function CategoryForm({
             {/* Delete button for non-system taxonomies */}
             {!isCreateMode && !isSystem && (
               <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive hover:text-destructive"
-                    disabled={deleteMutation.isPending}
-                  >
-                    {deleteMutation.isPending ? (
-                      <Icons.Loader className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Icons.Trash2 className="h-4 w-4" />
-                    )}
-                  </Button>
+                <AlertDialogTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:text-destructive"
+                      disabled={deleteMutation.isPending}
+                    />
+                  }
+                >
+                  {deleteMutation.isPending ? (
+                    <Spinner className="h-4 w-4" />
+                  ) : (
+                    <Icons.Trash2 className="h-4 w-4" />
+                  )}
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
@@ -290,10 +294,7 @@ export function CategoryForm({
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>{t("common:cancel")}</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleDelete}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
+                    <AlertDialogAction onClick={handleDelete} variant="destructive">
                       {t("common:delete")}
                     </AlertDialogAction>
                   </AlertDialogFooter>

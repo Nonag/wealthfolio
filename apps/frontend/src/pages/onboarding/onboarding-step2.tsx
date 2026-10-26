@@ -1,5 +1,6 @@
 import { DEFAULT_LOCALE, SUPPORTED_LOCALES } from "@/i18n/locales";
 import { useSettingsContext } from "@/lib/settings-provider";
+import { requiredError } from "@/lib/zod-errors";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createFormatter, Icons, resolveFormattingLocale } from "@wealthfolio/ui";
 import { Card, CardContent } from "@wealthfolio/ui/components/ui/card";
@@ -22,10 +23,10 @@ import * as z from "zod";
 function createOnboardingSettingsSchema(t: TFunction) {
   return z.object({
     baseCurrency: z
-      .string({ required_error: t("onboarding:steps.preferences.currencyRequired") })
+      .string({ error: requiredError(t("onboarding:steps.preferences.currencyRequired")) })
       .min(1, t("onboarding:steps.preferences.currencyRequired")),
     timezone: z
-      .string({ required_error: t("onboarding:steps.preferences.timezoneRequired") })
+      .string({ error: requiredError(t("onboarding:steps.preferences.timezoneRequired")) })
       .min(1, t("onboarding:steps.preferences.timezoneRequired")),
   });
 }
@@ -80,8 +81,10 @@ const formattingRegions = [
   ["CA", "canada"],
   ["US", "unitedStates"],
   ["GB", "unitedKingdom"],
+  ["IN", "india"],
   ["FR", "france"],
   ["DE", "germany"],
+  ["AT", "austria"],
   ["CH", "switzerland"],
   ["ES", "spain"],
   ["MX", "mexico"],
@@ -92,6 +95,8 @@ const formattingRegions = [
   ["JP", "japan"],
   ["KR", "southKorea"],
   ["IT", "italy"],
+  ["RO", "romania"],
+  ["BG", "bulgaria"],
 ] as const;
 
 const popularFormattingRegions = ["system", "US", "CA", "GB"];
@@ -399,7 +404,7 @@ export const OnboardingStep2 = forwardRef<OnboardingStep2Handle, OnboardingStep2
                           key={locale}
                           type="button"
                           onClick={() => handleFormattingRegionSelect(locale)}
-                          className={`inline-flex min-h-10 max-w-full items-center rounded-md border px-3 py-2 text-left text-sm font-medium leading-tight transition-colors ${
+                          className={`inline-flex min-h-10 max-w-full items-center rounded-md border px-3 py-2 text-start text-sm font-medium leading-tight transition-colors ${
                             formattingRegion === locale
                               ? "border-primary bg-primary/10 text-primary"
                               : "border-border bg-background hover:border-primary/50 hover:bg-accent"
@@ -427,7 +432,7 @@ export const OnboardingStep2 = forwardRef<OnboardingStep2Handle, OnboardingStep2
                     name="baseCurrency"
                     render={({ field }) => (
                       <FormItem className="border-border/70 bg-muted/10 min-w-0 rounded-xl border p-4">
-                        <div className="mb-3 flex items-center gap-2.5">
+                        <div className="mb-1 flex items-center gap-2.5">
                           <div className="bg-muted rounded-md p-1.5">
                             <Icons.DollarSign className="text-muted-foreground size-4" />
                           </div>
@@ -472,7 +477,7 @@ export const OnboardingStep2 = forwardRef<OnboardingStep2Handle, OnboardingStep2
                     name="timezone"
                     render={({ field }) => (
                       <FormItem className="border-border/70 bg-muted/10 min-w-0 rounded-xl border p-4">
-                        <div className="mb-3 flex items-center gap-2.5">
+                        <div className="mb-1 flex items-center gap-2.5">
                           <div className="bg-muted rounded-md p-1.5">
                             <Icons.Clock className="text-muted-foreground size-4" />
                           </div>
@@ -532,29 +537,30 @@ export const OnboardingStep2 = forwardRef<OnboardingStep2Handle, OnboardingStep2
                       setLanguageSearch("");
                     }}
                     className="hover:bg-accent rounded-lg p-2 transition-colors"
+                    aria-label={t("common:close")}
                   >
                     <Icons.Close className="h-5 w-5" />
                   </button>
                 </div>
                 <div className="relative mb-4">
-                  <Icons.Search className="text-muted-foreground absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2" />
+                  <Icons.Search className="text-muted-foreground absolute start-3 top-1/2 h-5 w-5 -translate-y-1/2" />
                   <Input
                     type="text"
                     placeholder={t("onboarding:steps.preferences.searchLanguagesPlaceholder")}
                     value={languageSearch}
                     onChange={(event) => setLanguageSearch(event.target.value)}
-                    className="pl-10"
+                    className="ps-10"
                     autoFocus
                   />
                 </div>
-                <div className="max-h-96 space-y-1 overflow-y-auto pr-2">
+                <div className="max-h-96 space-y-1 overflow-y-auto pe-2">
                   {filteredLocales.map((locale) => (
                     <button
                       key={locale.code}
                       type="button"
                       data-testid={`language-${locale.code}-button`}
                       onClick={() => handleLanguageSelect(locale.code)}
-                      className={`flex w-full items-center justify-between rounded-lg p-3 text-left transition-all ${
+                      className={`flex w-full items-center justify-between rounded-lg p-3 text-start transition-all ${
                         language === locale.code ? "bg-primary/10" : "hover:bg-accent"
                       }`}
                     >
@@ -592,24 +598,25 @@ export const OnboardingStep2 = forwardRef<OnboardingStep2Handle, OnboardingStep2
                       setCurrencySearch("");
                     }}
                     className="hover:bg-accent rounded-lg p-2 transition-colors"
+                    aria-label={t("common:close")}
                   >
                     <Icons.Close className="h-5 w-5" />
                   </button>
                 </div>
 
                 <div className="relative mb-4">
-                  <Icons.Search className="text-muted-foreground absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 transform" />
+                  <Icons.Search className="text-muted-foreground absolute start-3 top-1/2 h-5 w-5 -translate-y-1/2 transform" />
                   <Input
                     type="text"
                     placeholder={t("onboarding:steps.preferences.searchCurrenciesPlaceholder")}
                     value={currencySearch}
                     onChange={(e) => setCurrencySearch(e.target.value)}
-                    className="pl-10"
+                    className="ps-10"
                     autoFocus
                   />
                 </div>
 
-                <div className="max-h-96 space-y-1 overflow-y-auto pr-2">
+                <div className="max-h-96 space-y-1 overflow-y-auto pe-2">
                   {filteredCurrencies.map((curr) => (
                     <button
                       key={curr.value}
@@ -619,7 +626,7 @@ export const OnboardingStep2 = forwardRef<OnboardingStep2Handle, OnboardingStep2
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="text-left">
+                        <div className="text-start">
                           <div className="font-semibold">{curr.value}</div>
                           <div className="text-muted-foreground text-sm">{curr.label}</div>
                         </div>
@@ -655,28 +662,29 @@ export const OnboardingStep2 = forwardRef<OnboardingStep2Handle, OnboardingStep2
                       setFormattingRegionSearch("");
                     }}
                     className="hover:bg-accent rounded-lg p-2 transition-colors"
+                    aria-label={t("common:close")}
                   >
                     <Icons.Close className="h-5 w-5" />
                   </button>
                 </div>
                 <div className="relative mb-4">
-                  <Icons.Search className="text-muted-foreground absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2" />
+                  <Icons.Search className="text-muted-foreground absolute start-3 top-1/2 h-5 w-5 -translate-y-1/2" />
                   <Input
                     type="text"
                     placeholder={t("onboarding:steps.preferences.searchRegionsPlaceholder")}
                     value={formattingRegionSearch}
                     onChange={(event) => setFormattingRegionSearch(event.target.value)}
-                    className="pl-10"
+                    className="ps-10"
                     autoFocus
                   />
                 </div>
-                <div className="max-h-96 space-y-1 overflow-y-auto pr-2">
+                <div className="max-h-96 space-y-1 overflow-y-auto pe-2">
                   {filteredFormattingRegions.map(([value, labelKey]) => (
                     <button
                       key={value}
                       type="button"
                       onClick={() => handleFormattingRegionSelect(value)}
-                      className={`flex w-full items-center justify-between rounded-lg p-3 text-left transition-all ${
+                      className={`flex w-full items-center justify-between rounded-lg p-3 text-start transition-all ${
                         formattingRegion === value ? "bg-primary/10" : "hover:bg-accent"
                       }`}
                     >
@@ -716,24 +724,25 @@ export const OnboardingStep2 = forwardRef<OnboardingStep2Handle, OnboardingStep2
                       setTimezoneSearch("");
                     }}
                     className="hover:bg-accent rounded-lg p-2 transition-colors"
+                    aria-label={t("common:close")}
                   >
                     <Icons.Close className="h-5 w-5" />
                   </button>
                 </div>
 
                 <div className="relative mb-4">
-                  <Icons.Search className="text-muted-foreground absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 transform" />
+                  <Icons.Search className="text-muted-foreground absolute start-3 top-1/2 h-5 w-5 -translate-y-1/2 transform" />
                   <Input
                     type="text"
                     placeholder={t("onboarding:steps.preferences.searchTimezonesPlaceholder")}
                     value={timezoneSearch}
                     onChange={(e) => setTimezoneSearch(e.target.value)}
-                    className="pl-10"
+                    className="ps-10"
                     autoFocus
                   />
                 </div>
 
-                <div className="max-h-96 space-y-1 overflow-y-auto pr-2">
+                <div className="max-h-96 space-y-1 overflow-y-auto pe-2">
                   {filteredTimezones.map((tz) => (
                     <button
                       key={tz}
@@ -743,7 +752,7 @@ export const OnboardingStep2 = forwardRef<OnboardingStep2Handle, OnboardingStep2
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <div className="text-left">
+                        <div className="text-start">
                           <div className="font-semibold">{formatTimezoneLabel(tz)}</div>
                           <div className="text-muted-foreground text-sm">{tz}</div>
                         </div>

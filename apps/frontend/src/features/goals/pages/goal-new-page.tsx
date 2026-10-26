@@ -1,3 +1,4 @@
+import { useBackNavigation } from "@/pages/layouts/mobile-stack/use-mobile-stack";
 import { formatZonedDateKey } from "@/features/spending/lib/timezone";
 import type { Goal, GoalType, PlannerMode } from "@/lib/types";
 import { useSettingsContext } from "@/lib/settings-provider";
@@ -21,7 +22,8 @@ import {
 } from "@wealthfolio/ui/components/ui/card";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { Textarea } from "@wealthfolio/ui/components/ui/textarea";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useEffectOnChange } from "@/hooks/use-effect-on-change";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useCreateGoalFlow } from "../hooks/use-create-goal-flow";
@@ -59,7 +61,20 @@ function hasRetirementGoal(goals: Goal[]): boolean {
 export default function GoalNewPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const goBack = useBackNavigation("/goals");
   const createGoalFlow = useCreateGoalFlow();
+  // The new goal takes the form's place, so back from it returns to the list.
+  // Read from the saved result rather than the save's own callback: React Query
+  // skips that callback when the save ends while this screen is out of sight on
+  // a phone (another tab shown), and the form would come back ready to save again.
+  // Only a change of the result opens it, so it can't open twice.
+  const openCreatedGoal = useEffectEvent((goalId: string) =>
+    navigate(`/goals/${goalId}`, { replace: true }),
+  );
+  const createdGoalId = createGoalFlow.data?.goal.id;
+  useEffectOnChange(() => {
+    if (createdGoalId) void openCreatedGoal(createdGoalId);
+  }, [createdGoalId]);
   const { goals } = useGoals();
   const { settings } = useSettingsContext();
   const todayISO = formatZonedDateKey(new Date(), settings?.timezone);
@@ -211,17 +226,10 @@ export default function GoalNewPage() {
         }
       : undefined;
 
-    createGoalFlow.mutate(
-      {
-        goal: goalInput,
-        initialPlan,
-      },
-      {
-        onSuccess: ({ goal }) => {
-          navigate(`/goals/${goal.id}`);
-        },
-      },
-    );
+    createGoalFlow.mutate({
+      goal: goalInput,
+      initialPlan,
+    });
   };
 
   return (
@@ -229,7 +237,7 @@ export default function GoalNewPage() {
       <PageHeader
         heading={t("goals:new.create_goal")}
         text={t("goals:new.subtitle")}
-        onBack={() => navigate("/goals")}
+        onBack={goBack}
       />
       <PageContent>
         {!selectedType ? (
@@ -260,7 +268,7 @@ export default function GoalNewPage() {
                       <div className="text-muted-foreground/25">{tmpl.icon}</div>
                     </div>
                     <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/60 to-transparent" />
-                    <div className="absolute bottom-3 left-4">
+                    <div className="absolute bottom-3 start-4">
                       <p className="text-base font-semibold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.4)]">
                         {tmpl.title}
                       </p>
@@ -270,7 +278,7 @@ export default function GoalNewPage() {
                     <CardDescription className="text-xs leading-relaxed">
                       {tmpl.description}
                       {disabled && (
-                        <span className="text-muted-foreground mt-1 block text-[11px]">
+                        <span className="text-muted-foreground text-2xs mt-1 block">
                           {t("goals:new.retirement_exists_hint")}
                         </span>
                       )}
@@ -332,7 +340,7 @@ export default function GoalNewPage() {
                       <div className="grid grid-cols-2 gap-3">
                         <button
                           type="button"
-                          className={`rounded-xl border p-3 text-left transition-colors ${
+                          className={`rounded-xl border p-3 text-start transition-colors ${
                             plannerMode === "traditional"
                               ? "border-primary bg-primary/5"
                               : "border-border/60 hover:border-muted-foreground/60"
@@ -348,7 +356,7 @@ export default function GoalNewPage() {
                         </button>
                         <button
                           type="button"
-                          className={`rounded-xl border p-3 text-left transition-colors ${
+                          className={`rounded-xl border p-3 text-start transition-colors ${
                             plannerMode === "fire"
                               ? "border-primary bg-primary/5"
                               : "border-border/60 hover:border-muted-foreground/60"
@@ -415,6 +423,7 @@ export default function GoalNewPage() {
                         <Label htmlFor="goal-target-amount">{t("goals:new.target_amount")}</Label>
                         <MoneyInput
                           name="goal-target-amount"
+                          aria-label={t("goals:new.target_amount")}
                           value={targetAmount}
                           onValueChange={(value) => setTargetAmount(value ?? 0)}
                           thousandSeparator

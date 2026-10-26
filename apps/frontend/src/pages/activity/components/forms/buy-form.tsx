@@ -3,8 +3,9 @@ import { useSettings } from "@/hooks/use-settings";
 import { ACTIVITY_SUBTYPES, ActivityType, QuoteMode } from "@/lib/constants";
 import { buildOccSymbol, isValidOptionExpiration } from "@/lib/occ-symbol";
 import { normalizeCurrency } from "@/lib/utils";
+import { invalidTypeError, requiredError } from "@/lib/zod-errors";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useNumberFormatting } from "@wealthfolio/ui";
+import { useNumberFormatting, Spinner } from "@wealthfolio/ui";
 import { Alert, AlertDescription } from "@wealthfolio/ui/components/ui/alert";
 import { Button } from "@wealthfolio/ui/components/ui/button";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
@@ -63,15 +64,12 @@ export const createBuyFormSchema = (t?: TFunction) =>
       assetId: z.string().default(""),
       existingAssetId: z.string().nullable().optional(),
       activityDate: z.date({
-        required_error: msg(t, "activity:form.err_select_date", "Please select a date."),
+        error: requiredError(msg(t, "activity:form.err_select_date", "Please select a date.")),
       }),
       quantity: z.coerce
         .number({
-          required_error: msg(t, "activity:form.err_enter_quantity", "Please enter a quantity."),
-          invalid_type_error: msg(
-            t,
-            "activity:form.err_quantity_number",
-            "Quantity must be a number.",
+          error: invalidTypeError(
+            msg(t, "activity:form.err_quantity_number", "Quantity must be a number."),
           ),
         })
         .positive({
@@ -79,16 +77,22 @@ export const createBuyFormSchema = (t?: TFunction) =>
         }),
       unitPrice: z.coerce
         .number({
-          required_error: msg(t, "activity:form.err_enter_price", "Please enter a price."),
-          invalid_type_error: msg(t, "activity:form.err_price_number", "Price must be a number."),
+          error: invalidTypeError(
+            msg(t, "activity:form.err_price_number", "Price must be a number."),
+          ),
         })
         .positive({
           message: msg(t, "activity:form.err_price_gt_zero", "Price must be greater than 0."),
         }),
-      amount: z.coerce.number().min(0).optional(),
+      amount: z.coerce
+        .number()
+        .min(0, {
+          message: msg(t, "activity:form.err_amount_non_negative", "Amount must be non-negative."),
+        })
+        .optional(),
       fee: z.coerce
         .number({
-          invalid_type_error: msg(t, "activity:form.err_fee_number", "Fee must be a number."),
+          error: invalidTypeError(msg(t, "activity:form.err_fee_number", "Fee must be a number.")),
         })
         .min(0, {
           message: msg(t, "activity:form.err_fee_non_negative", "Fee must be non-negative."),
@@ -96,7 +100,7 @@ export const createBuyFormSchema = (t?: TFunction) =>
         .default(0),
       tax: z.coerce
         .number({
-          invalid_type_error: msg(t, "activity:form.err_tax_number", "Tax must be a number."),
+          error: invalidTypeError(msg(t, "activity:form.err_tax_number", "Tax must be a number.")),
         })
         .min(0, {
           message: msg(t, "activity:form.err_tax_non_negative", "Tax must be non-negative."),
@@ -105,15 +109,15 @@ export const createBuyFormSchema = (t?: TFunction) =>
       comment: z.string().optional().nullable(),
       subtype: z.string().optional().nullable(),
       // Advanced options
-      currency: z.string().min(1, {
-        message: msg(t, "activity:form.err_currency_required", "Currency is required."),
-      }),
+      currency: z
+        .string({ error: msg(t, "activity:form.err_currency_required", "Currency is required.") })
+        .min(1, {
+          message: msg(t, "activity:form.err_currency_required", "Currency is required."),
+        }),
       fxRate: z.coerce
         .number({
-          invalid_type_error: msg(
-            t,
-            "activity:form.err_fxrate_number",
-            "FX Rate must be a number.",
+          error: invalidTypeError(
+            msg(t, "activity:form.err_fxrate_number", "FX Rate must be a number."),
           ),
         })
         .positive({
@@ -130,10 +134,32 @@ export const createBuyFormSchema = (t?: TFunction) =>
       assetMetadata: assetMetadataSchema,
       // Option-specific fields
       underlyingSymbol: z.string().optional(),
-      strikePrice: z.coerce.number().positive().optional(),
+      strikePrice: z.coerce
+        .number()
+        .positive({
+          message: msg(
+            t,
+            "activity:form.err_strike_gt_zero",
+            "Strike price must be greater than 0.",
+          ),
+        })
+        .optional(),
       expirationDate: z.string().optional(),
       optionType: z.enum(["CALL", "PUT"]).optional(),
-      contractMultiplier: z.coerce.number().positive().default(100).optional(),
+      contractMultiplier: z.coerce
+        .number({
+          error: invalidTypeError(
+            msg(t, "activity:form.err_multiplier_number", "Contract multiplier must be a number."),
+          ),
+        })
+        .positive({
+          message: msg(
+            t,
+            "activity:form.err_multiplier_gt_zero",
+            "Contract multiplier must be greater than 0.",
+          ),
+        })
+        .optional(),
     })
     .superRefine((data, ctx) => {
       // Options build their symbol at submit time; stocks/bonds require it upfront
@@ -573,27 +599,23 @@ export function BuyForm({
           />
 
           {isBuyWhileShortWithoutCover && (
-            <Alert variant="default" className="border-warning bg-warning/10">
-              <Icons.AlertTriangle className="text-warning h-4 w-4" />
-              <AlertDescription className="text-warning text-sm">
-                {t("activity:form.warn_buy_while_short")}
-              </AlertDescription>
+            <Alert variant="warning">
+              <Icons.AlertTriangle />
+              <AlertDescription>{t("activity:form.warn_buy_while_short")}</AlertDescription>
             </Alert>
           )}
 
           {isCoverWithoutShort && (
-            <Alert variant="default" className="border-warning bg-warning/10">
-              <Icons.AlertTriangle className="text-warning h-4 w-4" />
-              <AlertDescription className="text-warning text-sm">
-                {t("activity:form.warn_cover_without_short")}
-              </AlertDescription>
+            <Alert variant="warning">
+              <Icons.AlertTriangle />
+              <AlertDescription>{t("activity:form.warn_cover_without_short")}</AlertDescription>
             </Alert>
           )}
 
           {isCoverQuantityExcess && (
-            <Alert variant="default" className="border-warning bg-warning/10">
-              <Icons.AlertTriangle className="text-warning h-4 w-4" />
-              <AlertDescription className="text-warning text-sm">
+            <Alert variant="warning">
+              <Icons.AlertTriangle />
+              <AlertDescription>
                 {t("activity:form.warn_cover_quantity_excess", {
                   covering: formatting.formatDecimal(Number(optQuantity)),
                   short: formatting.formatDecimal(currentShortQuantity),
@@ -630,11 +652,11 @@ export function BuyForm({
             </Button>
           )}
           <Button type="submit" disabled={isLoading}>
-            {isLoading && <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />}
+            {isLoading && <Spinner className="me-2 h-4 w-4" />}
             {isEditing ? (
-              <Icons.Check className="mr-2 h-4 w-4" />
+              <Icons.Check className="me-2 h-4 w-4" />
             ) : (
-              <Icons.Plus className="mr-2 h-4 w-4" />
+              <Icons.Plus className="me-2 h-4 w-4" />
             )}
             {isEditing
               ? t("activity:form.button_update")

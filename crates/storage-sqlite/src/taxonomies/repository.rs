@@ -578,3 +578,59 @@ impl TaxonomyRepositoryTrait for TaxonomyRepository {
         Ok(results)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::{create_pool, init, run_migrations, write_actor::spawn_writer};
+    use tempfile::tempdir;
+
+    fn setup_repo() -> TaxonomyRepository {
+        std::env::set_var("CONNECT_API_URL", "http://test.local");
+        let app_data = tempdir()
+            .expect("tempdir")
+            .keep()
+            .to_string_lossy()
+            .to_string();
+        let db_path = init(&app_data).expect("init db");
+        run_migrations(&db_path).expect("migrate db");
+        let pool = create_pool(&db_path).expect("create pool");
+        let writer = spawn_writer(pool.as_ref().clone()).expect("spawn writer");
+        TaxonomyRepository::new(pool, writer)
+    }
+
+    async fn create(repo: &TaxonomyRepository, key: &str, parent_id: Option<String>) -> Category {
+        repo.create_category(NewCategory {
+            taxonomy_id: "spending_categories".to_string(),
+            parent_id,
+            name: key.to_string(),
+            key: key.to_string(),
+            color: "#808080".to_string(),
+            ..Default::default()
+        })
+        .await
+        .expect("create category")
+    }
+
+    #[tokio::test]
+    async fn update_category_moves_a_child_to_the_top_level() {
+        let repo = setup_repo();
+        let parent = create(&repo, "test_parent", None).await;
+        let child = create(&repo, "test_child", Some(parent.id.clone())).await;
+
+        let updated = repo
+            .update_category(Category {
+                parent_id: None,
+                ..child
+            })
+            .await
+            .expect("update category");
+
+        assert_eq!(updated.parent_id, None);
+        let stored = repo
+            .get_category(&updated.taxonomy_id, &updated.id)
+            .expect("get category")
+            .expect("category exists");
+        assert_eq!(stored.parent_id, None);
+    }
+}

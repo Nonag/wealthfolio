@@ -1,6 +1,8 @@
 import { useSettings } from "@/hooks/use-settings";
 import { isSecuritiesTransfer } from "@/lib/activity-utils";
 import { ActivityType, isLiabilityAccountType, QuoteMode } from "@/lib/constants";
+import { normalizeCurrency } from "@/lib/utils";
+import { invalidTypeError, requiredError } from "@/lib/zod-errors";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   FormControl,
@@ -10,6 +12,7 @@ import {
   FormMessage,
   MoneyInput,
   useAmountFormatting,
+  Spinner,
 } from "@wealthfolio/ui";
 import { AnimatedToggleGroup } from "@wealthfolio/ui/components/ui/animated-toggle-group";
 import { Button } from "@wealthfolio/ui/components/ui/button";
@@ -71,12 +74,14 @@ export const createTransferFormSchema = (t?: TFunction) =>
       fromAccountId: z.string().optional(), // For internal transfers
       toAccountId: z.string().optional(), // For internal transfers
       activityDate: z.date({
-        required_error: msg(t, "activity:form.err_select_date", "Please select a date."),
+        error: requiredError(msg(t, "activity:form.err_select_date", "Please select a date.")),
       }),
       transferMode: z.enum(["cash", "securities"]).default("cash"),
       amount: z.coerce
         .number({
-          invalid_type_error: msg(t, "activity:form.err_amount_number", "Amount must be a number."),
+          error: invalidTypeError(
+            msg(t, "activity:form.err_amount_number", "Amount must be a number."),
+          ),
         })
         .positive({
           message: msg(t, "activity:form.err_amount_gt_zero", "Amount must be greater than 0."),
@@ -85,10 +90,8 @@ export const createTransferFormSchema = (t?: TFunction) =>
         .nullable(),
       sourceAmount: z.coerce
         .number({
-          invalid_type_error: msg(
-            t,
-            "activity:form.err_sent_amount_number",
-            "Sent amount must be a number.",
+          error: invalidTypeError(
+            msg(t, "activity:form.err_sent_amount_number", "Sent amount must be a number."),
           ),
         })
         .positive({
@@ -102,10 +105,8 @@ export const createTransferFormSchema = (t?: TFunction) =>
         .nullable(),
       destinationAmount: z.coerce
         .number({
-          invalid_type_error: msg(
-            t,
-            "activity:form.err_received_amount_number",
-            "Received amount must be a number.",
+          error: invalidTypeError(
+            msg(t, "activity:form.err_received_amount_number", "Received amount must be a number."),
           ),
         })
         .positive({
@@ -117,7 +118,17 @@ export const createTransferFormSchema = (t?: TFunction) =>
         })
         .optional()
         .nullable(),
-      transferRate: z.coerce.number().positive().optional().nullable(),
+      transferRate: z.coerce
+        .number()
+        .positive({
+          message: msg(
+            t,
+            "activity:form.err_transfer_rate_gt_zero",
+            "Transfer exchange rate must be greater than 0.",
+          ),
+        })
+        .optional()
+        .nullable(),
       sourceCurrency: z.string().optional(),
       destinationCurrency: z.string().optional(),
       // Fields for security transfers
@@ -125,10 +136,8 @@ export const createTransferFormSchema = (t?: TFunction) =>
       existingAssetId: z.string().nullable().optional(),
       quantity: z.coerce
         .number({
-          invalid_type_error: msg(
-            t,
-            "activity:form.err_quantity_number",
-            "Quantity must be a number.",
+          error: invalidTypeError(
+            msg(t, "activity:form.err_quantity_number", "Quantity must be a number."),
           ),
         })
         .positive({
@@ -138,10 +147,8 @@ export const createTransferFormSchema = (t?: TFunction) =>
         .nullable(),
       unitPrice: z.coerce
         .number({
-          invalid_type_error: msg(
-            t,
-            "activity:form.err_cost_basis_number",
-            "Cost basis must be a number.",
+          error: invalidTypeError(
+            msg(t, "activity:form.err_cost_basis_number", "Cost basis must be a number."),
           ),
         })
         .positive({
@@ -155,15 +162,15 @@ export const createTransferFormSchema = (t?: TFunction) =>
         .nullable(),
       comment: z.string().optional().nullable(),
       // Advanced options
-      currency: z.string().min(1, {
-        message: msg(t, "activity:form.err_currency_required", "Currency is required."),
-      }),
+      currency: z
+        .string({ error: msg(t, "activity:form.err_currency_required", "Currency is required.") })
+        .min(1, {
+          message: msg(t, "activity:form.err_currency_required", "Currency is required."),
+        }),
       fxRate: z.coerce
         .number({
-          invalid_type_error: msg(
-            t,
-            "activity:form.err_fxrate_number",
-            "FX Rate must be a number.",
+          error: invalidTypeError(
+            msg(t, "activity:form.err_fxrate_number", "FX Rate must be a number."),
           ),
         })
         .positive({
@@ -238,11 +245,11 @@ export const createTransferFormSchema = (t?: TFunction) =>
         path: ["toAccountId"],
       },
     )
-    // Internal transfer: accounts must be different
+    // Same-account transfers are cash exchanges, never securities movements.
     .refine(
       (data) => {
         if (!data.isExternal) {
-          return data.fromAccountId !== data.toAccountId;
+          return data.fromAccountId !== data.toAccountId || data.transferMode === "cash";
         }
         return true;
       },
@@ -253,6 +260,22 @@ export const createTransferFormSchema = (t?: TFunction) =>
           "Source and destination accounts must be different.",
         ),
         path: ["toAccountId"],
+      },
+    )
+    .refine(
+      (data) =>
+        data.isExternal ||
+        !data.fromAccountId ||
+        data.fromAccountId !== data.toAccountId ||
+        data.transferMode !== "cash" ||
+        normalizeCurrency(data.sourceCurrency) !== normalizeCurrency(data.destinationCurrency),
+      {
+        message: msg(
+          t,
+          "activity:form.err_same_account_currencies",
+          "Choose different currencies for a same-account transfer.",
+        ),
+        path: ["destinationCurrency"],
       },
     )
     .refine(
@@ -479,6 +502,8 @@ export function TransferForm({
     [accounts, toAccountId],
   );
   const isInternalCashTransfer = !isExternal && isCashMode;
+  const isSameAccountCashTransfer =
+    isInternalCashTransfer && !!fromAccountId && fromAccountId === toAccountId;
   const isCreditCardPayment =
     isInternalCashTransfer && isLiabilityAccountType(destinationAccount?.accountType);
   const effectiveSourceCurrency = sourceCurrency || accountCurrency || currency || baseCurrency;
@@ -674,8 +699,9 @@ export function TransferForm({
         : t("activity:form.button_add_transfer");
   };
 
-  // Filter destination accounts to exclude source account (for internal transfers)
-  const toAccountOptions = destinationAccountOptions.filter((acc) => acc.value !== fromAccountId);
+  const toAccountOptions = destinationAccountOptions.filter(
+    (acc) => isCashMode || acc.value !== fromAccountId,
+  );
 
   const handleSubmit = createValidatedSubmit(form, async (data) => {
     // Ensure symbolQuoteCcy is set — manual/custom symbols leave it undefined
@@ -782,6 +808,7 @@ export function TransferForm({
             isCashMode ? t("activity:form.section_amount") : t("activity:form.section_securities")
           }
         >
+          {isSameAccountCashTransfer && <InternalTransferCurrencyFields />}
           {/* Securities mode: Symbol and Quantity at top */}
           {!isCashMode && (
             <>
@@ -902,7 +929,7 @@ export function TransferForm({
                       <FormItem>
                         <FormLabel>
                           {t("activity:form.label_transfer_rate")}
-                          <span className="text-muted-foreground ml-2 text-xs font-normal">
+                          <span className="text-muted-foreground ms-2 text-xs font-normal">
                             {t("activity:form.fx_conversion", {
                               from: effectiveSourceCurrency,
                               rate: Number(field.value) > 0 ? field.value : "?",
@@ -951,7 +978,9 @@ export function TransferForm({
           showCurrency={isExternal}
           showFxRate={isExternal}
         >
-          {isInternalCashTransfer && <InternalTransferCurrencyFields />}
+          {isInternalCashTransfer && !isSameAccountCashTransfer && (
+            <InternalTransferCurrencyFields />
+          )}
           <NotesInput
             name="comment"
             label={t("activity:form.label_notes")}
@@ -967,11 +996,11 @@ export function TransferForm({
             </Button>
           )}
           <Button type="submit" disabled={isLoading}>
-            {isLoading && <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />}
+            {isLoading && <Spinner className="me-2 h-4 w-4" />}
             {isEditing ? (
-              <Icons.Check className="mr-2 h-4 w-4" />
+              <Icons.Check className="me-2 h-4 w-4" />
             ) : (
-              <Icons.Plus className="mr-2 h-4 w-4" />
+              <Icons.Plus className="me-2 h-4 w-4" />
             )}
             {getSubmitButtonText()}
           </Button>
