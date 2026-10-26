@@ -122,7 +122,7 @@ describe("BudgetEditor setup rollover", () => {
       await user.click(screen.getByRole("button", { name: "Row options" }));
 
       if (targetType === "category") {
-        const toggle = screen.getByRole("menuitem", { name: /^Rollover\s*On$/ });
+        const toggle = await screen.findByRole("menuitem", { name: /^Rollover\s*On$/ });
         expect(toggle).not.toHaveAttribute("aria-disabled", "true");
         await user.click(toggle);
         expect(upsertRollover).toHaveBeenCalledOnce();
@@ -136,7 +136,7 @@ describe("BudgetEditor setup rollover", () => {
           }),
         );
       } else {
-        const toggle = screen.getByRole("menuitem", { name: /^Rollover\s*Group-wide$/ });
+        const toggle = await screen.findByRole("menuitem", { name: /^Rollover\s*Group-wide$/ });
         expect(toggle).toHaveAttribute("aria-disabled", "true");
         await user.click(toggle);
         expect(upsertRollover).not.toHaveBeenCalled();
