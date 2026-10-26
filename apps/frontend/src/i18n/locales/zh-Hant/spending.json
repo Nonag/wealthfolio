@@ -976,6 +976,7 @@
     "deleteGroupTitle": "刪除 {{name}}？",
     "deleteGroupWithCategories_one": "其中 {{count}} 個類別及其預算會移至「其他」群組。所有月份的群組緩衝金額都會合併加總。此操作無法復原。",
     "deleteGroupWithCategories_other": "其中 {{count}} 個類別及其預算會移至「其他」群組。所有月份的群組緩衝金額都會合併加總。此操作無法復原。",
+    "deleteGroupWithCategories_zero": "所有月份的群組緩衝金額都會合併到「其他」群組。此操作無法復原。",
     "deleteGroupRolloverBlocked": "此群組有已儲存的結轉設定，因此即使結轉已關閉，也無法刪除此群組。",
     "deleting": "正在刪除……",
     "addCategory": "新增類別",
