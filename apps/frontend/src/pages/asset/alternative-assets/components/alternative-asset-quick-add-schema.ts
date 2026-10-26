@@ -1,6 +1,7 @@
 import type { LoanSetup } from "@/adapters/shared/alternative-assets";
 import { AlternativeAssetKind } from "@/lib/types";
 import { formatDateISO } from "@/lib/utils";
+import { invalidTypeError, requiredError } from "@/lib/zod-errors";
 import * as z from "zod";
 import type { LoanInterestMethod, LoanPaymentFrequency } from "../lib/loan-events";
 
@@ -82,20 +83,12 @@ export const alternativeAssetQuickAddSchema = z
     name: z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters"),
     currency: z.string().min(1, "Currency is required"),
     quantity: z.coerce
-      .number({
-        required_error: "Please enter a valid quantity.",
-        invalid_type_error: "Quantity must be a number.",
-      })
+      .number({ error: invalidTypeError("Quantity must be a number.") })
       .positive("Quantity must be greater than 0"),
     currentValue: z.coerce
-      .number({
-        required_error: "Please enter a valid value.",
-        invalid_type_error: "Value must be a number.",
-      })
+      .number({ error: invalidTypeError("Value must be a number.") })
       .min(0, "Value cannot be negative"),
-    valueDate: z.date({
-      required_error: "Value date is required",
-    }),
+    valueDate: z.date({ error: requiredError("Value date is required") }),
 
     // Property-specific: has mortgage checkbox
     hasMortgage: z.boolean().optional(),
@@ -161,18 +154,18 @@ const entered = (value?: string) => {
 
 /**
  * A new loan as entered. The backend checks it, derives the schedule and solves
- * the payment; a manual loan keeps only its amounts, as before.
+ * the payment; a manual loan keeps its amounts and origination date.
  */
 export function quickAddLoanSetup(input: QuickAddLoanInput): LoanSetup {
   const amounts = {
     originalAmount: entered(input.purchasePrice),
     interestRate: entered(input.interestRate),
+    originationDate: input.purchaseDate ? formatDateISO(input.purchaseDate) : undefined,
   };
   if (input.automaticSchedule === false) return amounts;
   const months = (entered(input.loanTerm) ?? 0) * 12 + (entered(input.loanTermMonths) ?? 0);
   return {
     ...amounts,
-    originationDate: input.purchaseDate ? formatDateISO(input.purchaseDate) : undefined,
     schedule: {
       frequency: input.paymentFrequency ?? "monthly",
       interestMethod: input.interestMethod ?? "nominal_periodic",

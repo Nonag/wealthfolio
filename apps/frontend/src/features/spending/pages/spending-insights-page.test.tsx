@@ -58,6 +58,9 @@ vi.mock("../components/reports/heatmap-cell-sheet", () => ({ HeatmapCellSheet: (
 function Location() {
   return <output data-testid="location">{useLocation().search}</output>;
 }
+function sharedPick() {
+  return JSON.parse(localStorage.getItem("dashboard-period") ?? "null");
+}
 function setup(stage = "where") {
   render(
     <MemoryRouter
@@ -179,32 +182,40 @@ describe("custom range in Spending Insights", () => {
     },
   );
 
-  it("preserves dates when switching stage and removes them when selecting a preset", async () => {
+  it("keeps linked dates when switching stage and replaces them when selecting a preset", async () => {
     const user = setup();
+    // The link's dates are applied once and then dropped from the URL.
+    expect(screen.getByTestId("location")).not.toHaveTextContent("spendingFrom");
     await user.click(screen.getByRole("button", { name: "What changed" }));
-    expect(screen.getByTestId("location")).toHaveTextContent(
-      "spendingFrom=2025-03-08&spendingTo=2025-03-10",
+    expect(screen.getByTestId("location")).toHaveTextContent("stage=changed");
+    expect(screen.getByTestId("spending-selected-range")).toHaveTextContent(
+      "Mar 8, 2025 – Mar 10, 2025",
     );
     await user.click(screen.getByRole("button", { name: "YTD" }));
-    expect(screen.getByTestId("location")).toHaveTextContent("period=YTD");
-    expect(screen.getByTestId("location")).not.toHaveTextContent("spendingFrom");
+    expect(screen.getByTestId("location")).not.toHaveTextContent("period=");
+    expect(sharedPick()).toEqual({ kind: "spending", code: "YTD" });
     expect(screen.queryByTestId("spending-selected-range")).not.toBeInTheDocument();
   });
 
+  // Opening the date picker twice dominates this test: each Base UI popover open
+  // costs about 0.5 s in jsdom (0.15 s with Radix), so it runs 1.6 s locally and
+  // went over 5 s in CI's full run. In Chrome the picker opens in ~115 ms either way.
   it("applies a new range and clears back to the preset", async () => {
     const user = setup();
     await user.click(screen.getByRole("button", { name: "Select dates" }));
     fireEvent.change(screen.getByLabelText("Start date"), { target: { value: "2025-01-01" } });
     fireEvent.change(screen.getByLabelText("End date"), { target: { value: "2025-12-31" } });
     await user.click(screen.getByRole("button", { name: "Apply" }));
-    expect(screen.getByTestId("location")).toHaveTextContent(
-      "spendingFrom=2025-01-01&spendingTo=2025-12-31",
-    );
+    expect(sharedPick()).toEqual({ kind: "range", from: "2025-01-01", to: "2025-12-31" });
+    expect(screen.getByTestId("location")).not.toHaveTextContent("spendingFrom");
     await user.click(screen.getByRole("button", { name: "Select dates" }));
     await user.click(screen.getByRole("button", { name: "Clear" }));
-    expect(screen.getByTestId("location")).not.toHaveTextContent("spendingFrom");
-    expect(screen.getByTestId("location")).toHaveTextContent("period=MTD");
-  });
+    expect(sharedPick()).toEqual({ kind: "spending", code: "MTD" });
+    expect(screen.getByRole("button", { name: /This month/ })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  }, 15_000);
 });
 
 it.each(["where", "changed", "when"])(
@@ -220,3 +231,53 @@ it.each(["where", "changed", "when"])(
     expect(screen.getByTestId("spending-selected-range")).toHaveTextContent("February 2025");
   },
 );
+
+describe("period shared with the dashboard", () => {
+  function renderAt(search: string) {
+    render(
+      <MemoryRouter initialEntries={[`/spending/insights${search}`]}>
+        <SpendingInsightsPage />
+        <Location />
+      </MemoryRouter>,
+    );
+    return userEvent.setup();
+  }
+
+  it("follows the period picked on the dashboard when the URL names none", () => {
+    localStorage.setItem("dashboard-period", JSON.stringify({ kind: "portfolio", code: "6M" }));
+    renderAt("?stage=where");
+    expect(screen.getByRole("button", { name: "6M" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("shows dashboard custom dates", () => {
+    localStorage.setItem(
+      "dashboard-period",
+      JSON.stringify({ kind: "range", from: "2025-03-08", to: "2025-03-10" }),
+    );
+    renderAt("?stage=where");
+    expect(screen.getByTestId("spending-selected-range")).toHaveTextContent(
+      "Mar 8, 2025 – Mar 10, 2025",
+    );
+  });
+
+  it("applies a period named in the URL once, then drops it from the URL", () => {
+    localStorage.setItem("dashboard-period", JSON.stringify({ kind: "portfolio", code: "6M" }));
+    renderAt("?stage=where&period=YTD");
+    expect(screen.getByRole("button", { name: "YTD" })).toHaveAttribute("aria-pressed", "true");
+    expect(sharedPick()).toEqual({ kind: "spending", code: "YTD" });
+    expect(screen.getByTestId("location")).toHaveTextContent("?stage=where");
+    expect(screen.getByTestId("location")).not.toHaveTextContent("period=");
+  });
+
+  it("shares a period picked here with the dashboard", async () => {
+    const user = renderAt("?stage=where");
+    await user.click(screen.getByRole("button", { name: /Last month/ }));
+    expect(JSON.parse(localStorage.getItem("dashboard-period") ?? "null")).toEqual({
+      kind: "spending",
+      code: "LAST_MONTH",
+    });
+    expect(JSON.parse(localStorage.getItem("dashboard-interval") ?? "null")).toBe("1M");
+    // Back/forward can only revive what is in the URL, so a pick never goes there.
+    expect(screen.getByTestId("location")).not.toHaveTextContent("period=");
+  });
+});

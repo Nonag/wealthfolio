@@ -1,4 +1,6 @@
-import { fireEvent, render, screen } from "@/test/render";
+import { act, fireEvent, render, screen, waitFor } from "@/test/render";
+import { QueryClient, QueryClientProvider, useMutation } from "@tanstack/react-query";
+import { Activity } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { createInstance } from "i18next";
 import { I18nextProvider } from "react-i18next";
@@ -12,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   loading: false,
   error: false,
   removing: false,
+  useRemove: (() => undefined) as () => unknown,
   web: true,
   data: [
     {
@@ -32,6 +35,7 @@ vi.mock("@/adapters", () => ({
 }));
 vi.mock("@/hooks/use-platform", () => ({
   usePlatform: () => ({ platform: { is_desktop: false } }),
+  useIsMobileViewport: () => false,
 }));
 vi.mock("./use-backup-restore", () => ({
   useBackupRestore: () => ({
@@ -42,7 +46,7 @@ vi.mock("./use-backup-restore", () => ({
       refetch: mocks.retry,
     },
     create: { mutate: mocks.create, isPending: false },
-    remove: { mutate: mocks.remove, isPending: mocks.removing },
+    remove: mocks.useRemove(),
   }),
 }));
 vi.mock("./backup-export-dialog", () => ({
@@ -56,6 +60,7 @@ vi.mock("./backup-import-dialog", () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.removing = false;
+  mocks.useRemove = () => ({ mutateAsync: mocks.remove, isPending: mocks.removing });
   mocks.loading = false;
   mocks.error = false;
   mocks.web = true;
@@ -69,6 +74,9 @@ beforeEach(() => {
     },
   ];
 });
+function openRowMenu(name: RegExp | string) {
+  fireEvent.click(screen.getByRole("button", { name }));
+}
 it("shows actual snapshot protection and exports the selected snapshot", () => {
   render(<BackupRestoreForm />);
   expect(screen.getByText(new RegExp(copy.backup_protection_encrypted))).toBeVisible();
@@ -85,8 +93,10 @@ it("native opens review for saved snapshots and disables unavailable snapshots",
   });
   render(<BackupRestoreForm />);
   expect(screen.getByRole("button", { name: /^Restore Backup from Sep 2, 2026/ })).toBeDisabled();
-  expect(screen.getByRole("button", { name: /^Export Backup from Sep 2, 2026/ })).toBeDisabled();
-  expect(screen.getByRole("button", { name: /^Delete Backup from Sep 2, 2026/ })).toBeEnabled();
+  openRowMenu(/^Options for backup from Sep 2, 2026/);
+  expect(screen.getByRole("menuitem", { name: "Export" })).toHaveAttribute("aria-disabled", "true");
+  expect(screen.getByRole("menuitem", { name: "Delete" })).not.toHaveAttribute("aria-disabled");
+  fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
   fireEvent.click(screen.getByRole("button", { name: /^Restore Backup from Sep 1, 2026/ }));
   expect(screen.getByText("Inspecting old.db")).toBeVisible();
 });
@@ -95,7 +105,8 @@ it("native offers file restore alongside managed creation", () => {
   render(<BackupRestoreForm />);
   fireEvent.click(screen.getByRole("button", { name: copy.backup_now }));
   expect(mocks.create).toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: copy.backup_restore_from_file }));
+  openRowMenu("More options");
+  fireEvent.click(screen.getByRole("menuitem", { name: copy.backup_restore_from_file }));
   expect(screen.getByText("Inspecting picked file")).toBeVisible();
 });
 it("shows list failure and retry instead of an empty success state", () => {
@@ -109,8 +120,9 @@ it("shows list failure and retry instead of an empty success state", () => {
 it("keeps original server snapshots behind an explicit key warning, including unavailable keys", () => {
   mocks.data[0].protection = "unavailable";
   render(<BackupRestoreForm />);
-  expect(screen.getByRole("link", { name: copy.backup_original_save })).not.toBeVisible();
-  fireEvent.click(screen.getByText(copy.backup_original_advanced));
+  expect(screen.queryByText(copy.backup_original_warning)).not.toBeInTheDocument();
+  openRowMenu(/^Options for backup from Sep 1, 2026/);
+  fireEvent.click(screen.getByRole("menuitem", { name: copy.backup_original_advanced }));
   expect(screen.getByText(copy.backup_original_warning)).toBeVisible();
   expect(screen.getByRole("link", { name: copy.backup_original_save })).toHaveAttribute(
     "href",
@@ -121,6 +133,8 @@ it("keeps original server snapshots behind an explicit key warning, including un
 it("does not offer a server snapshot URL on native", () => {
   mocks.web = false;
   render(<BackupRestoreForm />);
+  openRowMenu(/^Options for backup from Sep 1, 2026/);
+  expect(screen.getByRole("menuitem", { name: "Export" })).toBeInTheDocument();
   expect(screen.queryByText(copy.backup_original_advanced)).not.toBeInTheDocument();
 });
 
@@ -133,7 +147,9 @@ it("web offers backup management without any restore controls", () => {
     screen.queryByRole("button", { name: /^Restore Backup from Sep 1, 2026/ }),
   ).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: /^Export Backup from Sep 1, 2026/ })).toBeEnabled();
-  expect(screen.getByRole("button", { name: /^Delete Backup from Sep 1, 2026/ })).toBeEnabled();
+  openRowMenu(/^Options for backup from Sep 1, 2026/);
+  expect(screen.getByRole("menuitem", { name: "Delete" })).not.toHaveAttribute("aria-disabled");
+  fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
   fireEvent.click(screen.getByRole("button", { name: copy.backup_now }));
   expect(mocks.create).toHaveBeenCalled();
 });
@@ -164,8 +180,15 @@ it.each(SUPPORTED_LOCALE_CODES)(
       </I18nextProvider>
     );
     const { rerender } = render(view());
-    fireEvent.click(screen.getByTitle(common.delete));
+    const menu = document.querySelector<HTMLElement>('[aria-haspopup="menu"]')!;
+    fireEvent.click(menu);
+    fireEvent.click(screen.getByRole("menuitem", { name: common.delete }));
     expect(screen.getByRole("button", { name: common.cancel })).toBeVisible();
+    mocks.remove.mockReturnValue(
+      new Promise(() => {
+        /* Keep the delete in flight. */
+      }),
+    );
     fireEvent.click(screen.getByRole("button", { name: common.delete }));
     expect(mocks.remove).toHaveBeenCalledWith("old.db");
     mocks.removing = true;
@@ -173,3 +196,36 @@ it.each(SUPPORTED_LOCALE_CODES)(
     expect(screen.getByRole("button", { name: settings.backup_deleting })).toBeDisabled();
   },
 );
+it("closes the delete prompt once the delete ends while its phone screen is out of sight", async () => {
+  // A phone screen kept under another one is a hidden <Activity>; left open,
+  // the prompt would offer to delete a backup that is gone.
+  let finish: () => void = () => undefined;
+  function useSlowRemove() {
+    return useMutation({ mutationFn: () => new Promise<void>((resolve) => (finish = resolve)) });
+  }
+  mocks.useRemove = useSlowRemove;
+  const client = new QueryClient();
+  const view = (hidden: boolean) => (
+    <QueryClientProvider client={client}>
+      <Activity mode={hidden ? "hidden" : "visible"}>
+        <BackupRestoreForm />
+      </Activity>
+    </QueryClientProvider>
+  );
+  const deleteStatus = () => client.getMutationCache().getAll()[0]?.state.status;
+  // jsdom never ends the closing animation, so a closed dialog stays in the page.
+  const promptOpen = () => screen.queryByRole("dialog")?.hasAttribute("data-open") ?? false;
+  const { rerender } = render(view(false));
+  openRowMenu(/^Options for backup from Sep 1, 2026/);
+  fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
+  fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+  await waitFor(() => expect(deleteStatus()).toBe("pending"));
+  expect(promptOpen()).toBe(true);
+
+  rerender(view(true));
+  act(() => finish());
+  await waitFor(() => expect(deleteStatus()).toBe("success"));
+  rerender(view(false));
+
+  await waitFor(() => expect(promptOpen()).toBe(false));
+});

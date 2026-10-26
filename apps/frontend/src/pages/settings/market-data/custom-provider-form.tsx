@@ -19,7 +19,7 @@ import { Input } from "@wealthfolio/ui/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@wealthfolio/ui/components/ui/radio-group";
 import { Textarea } from "@wealthfolio/ui/components/ui/textarea";
 import { toast } from "@wealthfolio/ui/components/ui/use-toast";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@wealthfolio/ui";
+import { Dialog, DialogContent, DialogDescription, DialogTitle, Spinner } from "@wealthfolio/ui";
 
 import { ExternalLink } from "@/components/external-link";
 import { useCreateCustomProvider, useUpdateCustomProvider } from "@/hooks/use-custom-providers";
@@ -80,7 +80,11 @@ function makeFormSchema(t: TFunction) {
         .min(1, t("settings:market_data_page.validation_code_required"))
         .regex(/^[a-z0-9-]+$/, t("settings:market_data_page.validation_code_format")),
       description: z.string().optional(),
-      priority: z.coerce.number().int().min(1).default(50),
+      priority: z.coerce
+        .number()
+        .int(t("settings:market_data_page.validation_priority_min"))
+        .min(1, t("settings:market_data_page.validation_priority_min"))
+        .default(50),
       useAsFallback: z.boolean().default(false),
       latestEnabled: z.boolean(),
       latestSource: sourceSchema,
@@ -264,7 +268,7 @@ export function CustomProviderForm({
       }}
     >
       <DialogContent
-        className="flex h-[92vh] w-[98vw] max-w-[1400px] flex-col overflow-hidden p-0 [--input-height:2.25rem]"
+        className="max-w-350 flex h-[92vh] w-[98vw] flex-col overflow-hidden p-0 [--input-height:2.25rem]"
         showCloseButton={false}
       >
         {open && (
@@ -296,8 +300,8 @@ function CustomProviderFormContent({
 }) {
   const { t } = useTranslation();
   const isEditing = !!provider;
-  const { mutate: createProvider, isPending: isCreating } = useCreateCustomProvider();
-  const { mutate: updateProvider, isPending: isUpdating } = useUpdateCustomProvider();
+  const { mutateAsync: createProvider, isPending: isCreating } = useCreateCustomProvider();
+  const { mutateAsync: updateProvider, isPending: isUpdating } = useUpdateCustomProvider();
   const { settings } = useSettingsContext();
   const isSaving = isCreating || isUpdating;
 
@@ -458,7 +462,7 @@ function CustomProviderFormContent({
   ]);
 
   const handleSave = useCallback(
-    (values: FormValues) => {
+    async (values: FormValues) => {
       const mapSource = (
         src: SourceFormValues,
         kind: "latest" | "historical",
@@ -488,9 +492,9 @@ function CustomProviderFormContent({
       if (values.latestEnabled) sources.push(mapSource(values.latestSource, "latest"));
       if (values.historicalEnabled) sources.push(mapSource(values.historicalSource, "historical"));
 
-      if (isEditing && provider) {
-        updateProvider(
-          {
+      try {
+        if (isEditing && provider) {
+          await updateProvider({
             providerId: provider.id,
             payload: {
               name: values.name,
@@ -499,21 +503,20 @@ function CustomProviderFormContent({
               useAsFallback: values.useAsFallback,
               sources,
             },
-          },
-          { onSuccess: () => onOpenChange(false) },
-        );
-      } else {
-        createProvider(
-          {
+          });
+        } else {
+          await createProvider({
             code: values.code,
             name: values.name,
             description: values.description || undefined,
             priority: values.priority,
             useAsFallback: values.useAsFallback,
             sources,
-          },
-          { onSuccess: () => onOpenChange(false) },
-        );
+          });
+        }
+        onOpenChange(false);
+      } catch {
+        // The mutation reports the error; the form stays open to try again.
       }
     },
     [isEditing, provider, createProvider, updateProvider, onOpenChange],
@@ -581,12 +584,12 @@ function CustomProviderFormContent({
         </div>
 
         {/* ── Body: two-pane ── */}
-        <div className="bg-muted/40 grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_560px]">
+        <div className="bg-muted/40 grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_35rem]">
           {/* LEFT pane */}
-          <div className="min-h-0 space-y-3 overflow-y-auto border-r p-4">
+          <div className="min-h-0 space-y-3 overflow-y-auto border-e p-4">
             {/* Provider Mode */}
             <div>
-              <div className="text-muted-foreground mb-2 text-[11px] font-medium uppercase tracking-wide">
+              <div className="text-muted-foreground text-2xs mb-2 font-medium uppercase tracking-wide">
                 {t("settings:market_data_page.provider_mode")}
               </div>
               <div className="grid gap-2 sm:grid-cols-3">
@@ -657,16 +660,16 @@ function CustomProviderFormContent({
                 </h3>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_140px]">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_8.75rem]">
                 <FormField
                   control={form.control}
                   name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+                      <FormLabel className="text-muted-foreground text-2xs font-medium uppercase tracking-wide">
                         {t("settings:market_data_page.provider_name")}
                         {!nameManuallyEdited && !isEditing && form.getValues("name") && (
-                          <span className="text-muted-foreground ml-1 font-normal normal-case tracking-normal">
+                          <span className="text-muted-foreground ms-1 font-normal normal-case tracking-normal">
                             {t("settings:market_data_page.provider_name_from_url")}
                           </span>
                         )}
@@ -687,7 +690,7 @@ function CustomProviderFormContent({
                   name="code"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+                      <FormLabel className="text-muted-foreground text-2xs font-medium uppercase tracking-wide">
                         {t("settings:market_data_page.code")}{" "}
                         <span className="font-normal normal-case tracking-normal">
                           {t("settings:market_data_page.code_auto")}
@@ -715,7 +718,7 @@ function CustomProviderFormContent({
                 name="description"
                 render={({ field }) => (
                   <FormItem className="mt-3">
-                    <FormLabel className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+                    <FormLabel className="text-muted-foreground text-2xs font-medium uppercase tracking-wide">
                       {t("common:description")}{" "}
                       <span className="font-normal normal-case tracking-normal">
                         {t("settings:market_data_page.description_optional")}
@@ -779,7 +782,7 @@ function CustomProviderFormContent({
                       control={form.control}
                       name="priority"
                       render={({ field }) => (
-                        <FormItem className="flex items-center gap-2 space-y-0">
+                        <FormItem className="flex items-center gap-2">
                           <FormLabel className="text-muted-foreground text-xs font-normal">
                             {t("settings:market_data_page.usage_fallback_order")}
                           </FormLabel>
@@ -799,7 +802,7 @@ function CustomProviderFormContent({
 
               {isEditing && (
                 <div className="mt-3 space-y-2 border-t pt-3">
-                  <div className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+                  <div className="text-muted-foreground text-2xs font-medium uppercase tracking-wide">
                     {t("settings:market_data_page.usage_used_by")}
                   </div>
                   {usageCount(usage) === 0 ? (
@@ -872,12 +875,12 @@ function CustomProviderFormContent({
             <Button type="submit" disabled={isSaving}>
               {isSaving ? (
                 <>
-                  <Icons.Spinner className="mr-1.5 h-4 w-4 animate-spin" />
+                  <Spinner className="me-1.5 h-4 w-4" />
                   {t("settings:market_data_page.saving")}
                 </>
               ) : (
                 <>
-                  <Icons.Check className="mr-1.5 h-4 w-4" />
+                  <Icons.Check className="me-1.5 h-4 w-4" />
                   {isEditing
                     ? t("settings:market_data_page.save_changes")
                     : t("settings:market_data_page.create_provider")}
@@ -913,7 +916,7 @@ function ModeCard({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex items-center gap-2 rounded-lg border p-3 text-left transition-all",
+        "flex items-center gap-2 rounded-lg border p-3 text-start transition-all",
         selected
           ? "bg-background border-foreground/30 ring-foreground/5 shadow-sm ring-1"
           : "bg-background/50 border-border hover:bg-background",
@@ -966,7 +969,7 @@ function UsageOption({
           <span className="text-muted-foreground block text-xs">{description}</span>
         </span>
       </label>
-      {children && <div className="mt-2 space-y-2 pl-6">{children}</div>}
+      {children && <div className="mt-2 space-y-2 ps-6">{children}</div>}
     </div>
   );
 }

@@ -94,6 +94,65 @@ describe("AddonIframeManager", () => {
     vi.unstubAllGlobals();
   });
 
+  it("generates a secure nonce without randomUUID", async () => {
+    const getRandomValues = vi.fn((bytes: Uint8Array) => bytes.fill(0x12));
+    vi.stubGlobal("crypto", { getRandomValues });
+    const manager = new AddonIframeManager();
+    const starting = manager.startAddon(input);
+    const cancelled = expect(starting).rejects.toMatchObject({ name: "AddonLoadCancelled" });
+    await vi.waitFor(() => expect(document.querySelector("iframe")).not.toBeNull());
+    expect(getNonce(getSandboxFrame())).toBe("12121212-1212-4212-9212-121212121212");
+    expect(getRandomValues).toHaveBeenCalledWith(expect.any(Uint8Array));
+    await manager.stopAllAddons();
+    await cancelled;
+  });
+
+  it.each([undefined, {}])(
+    "creates distinct event subscription IDs without crypto (%j)",
+    async (crypto) => {
+      vi.stubGlobal("crypto", crypto);
+      const manager = new AddonIframeManager();
+      const postMessage = vi.fn();
+      const runtime = {
+        addonId: input.addonId,
+        nonce: "nonce-1",
+        iframe: { contentWindow: { postMessage } },
+        api: { events: { portfolio: { onUpdateStart: vi.fn().mockResolvedValue(vi.fn()) } } },
+        subscriptions: new Map(),
+      };
+      const internals = manager as unknown as {
+        dispatchMessage: (runtime: unknown, message: unknown) => Promise<void>;
+      };
+      for (const requestId of ["first", "second"]) {
+        await internals.dispatchMessage(runtime, {
+          type: "eventSubscribe",
+          method: "events.portfolio.onUpdateStart",
+          requestId,
+        });
+      }
+      expect(runtime.subscriptions.size).toBe(2);
+      expect(postMessage).toHaveBeenCalledTimes(2);
+      expect(postMessage.mock.calls[0][0].result.subscriptionId).not.toBe(
+        postMessage.mock.calls[1][0].result.subscriptionId,
+      );
+    },
+  );
+
+  it.each([undefined, {}])(
+    "does not bootstrap an addon without secure randomness (%j)",
+    async (crypto) => {
+      vi.stubGlobal("crypto", crypto);
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+      const manager = new AddonIframeManager();
+      await expect(manager.startAddon(input)).rejects.toThrow("Secure randomness");
+      expect(document.querySelector("iframe")).toBeNull();
+      expect(manager.hasRuntime(input.addonId)).toBe(false);
+      expect(fetchMock).not.toHaveBeenCalled();
+      await manager.stopAllAddons();
+    },
+  );
+
   it("awaits resource cleanup after failed boot before starting a replacement", async () => {
     const manager = new AddonIframeManager();
     let releaseCleanup!: () => void;
@@ -142,7 +201,12 @@ describe("AddonIframeManager", () => {
   });
 
   it("passes host localization into the sandbox and broadcasts updates", async () => {
-    setAddonLocalizationSnapshot({ locale: "ja-JP", uiLocale: "en", timezone: "Asia/Tokyo" });
+    setAddonLocalizationSnapshot({
+      locale: "ja-JP",
+      uiLocale: "en",
+      direction: "rtl",
+      timezone: "Asia/Tokyo",
+    });
     const manager = new AddonIframeManager();
     const starting = manager.startAddon(input);
     const cancelled = expect(starting).rejects.toMatchObject({ name: "AddonLoadCancelled" });
@@ -152,6 +216,7 @@ describe("AddonIframeManager", () => {
     const bootstrap = new URLSearchParams(iframe.name);
     expect(bootstrap.get("locale")).toBe("ja-JP");
     expect(bootstrap.get("uiLocale")).toBe("en");
+    expect(bootstrap.get("direction")).toBe("rtl");
     expect(bootstrap.get("timezone")).toBe("Asia/Tokyo");
 
     const postMessage = vi.spyOn(iframe.contentWindow!, "postMessage").mockImplementation(() => {});
@@ -160,6 +225,48 @@ describe("AddonIframeManager", () => {
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         localization: { locale: "ko-KR", uiLocale: "fr", timezone: "Asia/Seoul" },
+        type: "localizationUpdate",
+      }),
+      "*",
+    );
+
+    const withCurrencyFormats = {
+      locale: "ko-KR",
+      uiLocale: "fr",
+      timezone: "Asia/Seoul",
+      currencyFormattingRegions: { INR: "IN", USD: "DE" },
+    };
+    postMessage.mockClear();
+    setAddonLocalizationSnapshot(withCurrencyFormats);
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ localization: withCurrencyFormats, type: "localizationUpdate" }),
+      "*",
+    );
+
+    // Settings refetches may rebuild the same map in a different insertion order.
+    postMessage.mockClear();
+    setAddonLocalizationSnapshot({
+      ...withCurrencyFormats,
+      currencyFormattingRegions: { USD: "DE", INR: "IN" },
+    });
+    expect(postMessage).not.toHaveBeenCalled();
+
+    const changedCurrencyFormats = {
+      ...withCurrencyFormats,
+      currencyFormattingRegions: { USD: "US", INR: "IN" },
+    };
+    setAddonLocalizationSnapshot(changedCurrencyFormats);
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ localization: changedCurrencyFormats, type: "localizationUpdate" }),
+      "*",
+    );
+
+    // A direction switch alone reaches the sandbox, so addons mirror with the host.
+    postMessage.mockClear();
+    setAddonLocalizationSnapshot({ ...changedCurrencyFormats, direction: "ltr" });
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        localization: { ...changedCurrencyFormats, direction: "ltr" },
         type: "localizationUpdate",
       }),
       "*",

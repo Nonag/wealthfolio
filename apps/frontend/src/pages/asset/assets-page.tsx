@@ -74,7 +74,7 @@ export default function AssetsPage() {
     <div className="space-y-6">
       <SettingsHeader heading={t("asset:securities.heading")} text={t("asset:securities.subtitle")}>
         <Button onClick={() => setCreateDialogOpen(true)} size="sm">
-          <Icons.Plus className="mr-2 h-4 w-4" />
+          <Icons.Plus className="me-2 h-4 w-4" />
           {t("asset:securities.add_security")}
         </Button>
       </SettingsHeader>
@@ -173,9 +173,14 @@ export default function AssetsPage() {
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
         onSubmit={(payload) => {
-          createAssetMutation.mutate(payload, {
-            onSuccess: () => setCreateDialogOpen(false),
-          });
+          // Closes once the save itself ends: React Query skips callbacks passed
+          // to mutate() while a phone screen is out of sight, which left the
+          // dialog open, ready to create the security a second time.
+          void createAssetMutation.mutateAsync(payload).then(
+            () => setCreateDialogOpen(false),
+            // The mutation reports the error; the dialog stays open to try again.
+            () => undefined,
+          );
         }}
         isPending={createAssetMutation.isPending}
       />

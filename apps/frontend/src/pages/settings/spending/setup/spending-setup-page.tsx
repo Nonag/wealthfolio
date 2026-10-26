@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
+import { useBackNavigation } from "@/pages/layouts/mobile-stack/use-mobile-stack";
 
 import { Button, Icons } from "@wealthfolio/ui";
 
@@ -11,7 +12,7 @@ import { SpendingBackLink } from "../components/spending-back-link";
 export default function SpendingSetupPage() {
   const { t } = useTranslation();
   const { isEnabled, isLoading: settingsLoading } = useSpendingSettings();
-  const navigate = useNavigate();
+  const goBack = useBackNavigation("/settings/spending");
 
   if (!settingsLoading && !isEnabled) {
     return <Navigate to="/settings/spending" replace />;
@@ -26,11 +27,11 @@ export default function SpendingSetupPage() {
           type="button"
           variant="ghost"
           size="sm"
-          onClick={() => navigate("/settings/spending")}
-          className="text-muted-foreground hover:text-foreground -ml-1 h-8 w-8 shrink-0 p-0 sm:hidden"
+          onClick={goBack}
+          className="text-muted-foreground hover:text-foreground -ms-1 h-8 w-8 shrink-0 p-0 sm:hidden"
           aria-label={t("settings:spending.back_to_tracker")}
         >
-          <Icons.ArrowLeft className="h-5 w-5" />
+          <Icons.ArrowLeft className="h-5 w-5 rtl:rotate-180" />
         </Button>
         <div className="min-w-0 flex-1">
           <h1 className="text-foreground text-base font-semibold tracking-tight sm:text-lg lg:text-xl">

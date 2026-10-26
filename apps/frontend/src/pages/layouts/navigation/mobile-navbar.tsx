@@ -8,9 +8,18 @@ import { useHapticFeedback } from "@/hooks/use-haptic-feedback";
 import { cn } from "@/lib/utils";
 import { Icons, Sheet, SheetContent, SheetTitle } from "@wealthfolio/ui";
 import { motion } from "motion/react";
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useMobileStack } from "../mobile-stack/use-mobile-stack";
 import { type NavLink, type NavigationProps, isPathActive } from "./app-navigation";
 import { resolveNavigationIcon } from "./navigation-icons";
 
@@ -40,6 +49,11 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
   const backButtonRef = useRef<HTMLButtonElement>(null);
   const profileButtonRef = useRef<HTMLButtonElement>(null);
   const showProfileView = (show: boolean) => {
+    // Keep focus inside the sheet while its focused button is replaced. Base UI
+    // otherwise restores the popup's focus next frame, overriding our target.
+    (show ? profileButtonRef : backButtonRef).current
+      ?.closest<HTMLElement>('[data-slot="sheet-content"]')
+      ?.focus();
     setProfileView(show);
     requestAnimationFrame(() => {
       (show ? backButtonRef : profileButtonRef).current?.focus();
@@ -49,19 +63,40 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
   const { triggerHaptic } = useHapticFeedback();
   const uniqueId = useId();
   const { status: syncStatus } = useAggregatedSyncStatus();
+  const stack = useMobileStack();
 
   const containerClassName = "pointer-events-none fixed inset-x-0 bottom-0 z-50";
   const buttonClassName =
     "text-foreground relative z-10 flex h-14 w-full items-center justify-center rounded-full transition-colors landscape:size-11";
 
   const handleNavigation = useCallback(
-    (href: string, isActive: boolean) => {
+    (event: MouseEvent, href: string, isActive: boolean) => {
+      // A stacked tab opens on the screen it was left on.
+      const stackedTab = stack?.config.tabs.find((tab) => tab.rootPath === href);
+      if (stackedTab) {
+        event.preventDefault();
+        triggerHaptic();
+        stack?.openTab(stackedTab.id);
+        return;
+      }
       if (isActive) return;
+      // The Link would navigate again after this handler, adding a second
+      // history entry for the same tap.
+      event.preventDefault();
       triggerHaptic();
       navigate(href);
     },
-    [triggerHaptic, navigate],
+    [triggerHaptic, navigate, stack],
   );
+
+  // A stacked tab is current while its stack is shown, whatever screen is on
+  // top: a holding opened from Insights stays in Insights. Other destinations
+  // follow the address.
+  const isItemActive = (href: string) => {
+    const stackedTab = stack?.config.tabs.find((tab) => tab.rootPath === href);
+    if (stack && stackedTab) return stack.state.activeTab === stackedTab.id;
+    return isPathActive(location.pathname, href);
+  };
 
   const renderIcon = useCallback((icon?: ReactNode) => resolveNavigationIcon(icon, "size-6"), []);
 
@@ -116,7 +151,7 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
             className="grid auto-cols-fr grid-flow-col place-items-center gap-2 landscape:auto-cols-[2.75rem]"
           >
             {visibleItems.map((item) => {
-              const isActive = isPathActive(location.pathname, item.href);
+              const isActive = isItemActive(item.href);
               const isSearch = item.href === "#search";
 
               return (
@@ -138,7 +173,7 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                       });
                       document.dispatchEvent(event);
                     } else {
-                      handleNavigation(item.href, isActive);
+                      handleNavigation(e, item.href, isActive);
                     }
                   }}
                   aria-label={item.title}
@@ -178,7 +213,7 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                 aria-label={t("common:layout.more_options")}
                 className={buttonClassName}
               >
-                {moreItems.some((item) => isPathActive(location.pathname, item.href)) && (
+                {moreItems.some((item) => isItemActive(item.href)) && (
                   <motion.div
                     layoutId={`mobile-nav-indicator-${uniqueId}`}
                     className="absolute inset-0 -z-10 rounded-full border border-black/10 bg-black/5 shadow-sm dark:border-white/10 dark:bg-white/10"
@@ -206,7 +241,7 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
         <SheetContent
           side="bottom"
           showCloseButton={false}
-          className="bg-background inset-x-4 bottom-4 flex max-h-[min(82dvh,720px)] flex-col gap-0 overflow-hidden rounded-[2rem] border-0 px-0 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-0 shadow-2xl"
+          className="bg-background inset-x-4 bottom-4 flex max-h-[min(82dvh,45rem)] flex-col gap-0 overflow-hidden rounded-[2rem] border-0 px-0 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] pt-0 shadow-2xl"
         >
           <div className="bg-muted mx-auto mt-4 h-1.5 w-14 shrink-0 rounded-full" />
           <div className="flex shrink-0 items-center justify-between px-8 pb-4 pt-7">
@@ -219,7 +254,7 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                   className="hover:bg-muted flex size-11 shrink-0 items-center justify-center rounded-full"
                   aria-label={t("common:back")}
                 >
-                  <Icons.ArrowLeft className="size-5" />
+                  <Icons.ArrowLeft className="size-5 rtl:rotate-180" />
                 </button>
               )}
               <SheetTitle
@@ -252,7 +287,7 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                       aria-label={t("common:profiles.menuLabel", {
                         name: profileContext.profile.name,
                       })}
-                      className="hover:bg-muted flex min-h-14 w-full items-center gap-4 rounded-lg text-left"
+                      className="hover:bg-muted flex min-h-14 w-full items-center gap-4 rounded-lg text-start"
                     >
                       <ProfileAvatar
                         id={profileContext.profile.avatarId}
@@ -261,20 +296,20 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                       <span className="min-w-0 flex-1 truncate font-semibold">
                         {profileContext.profile.name}
                       </span>
-                      <Icons.ChevronRight className="text-muted-foreground size-5 shrink-0" />
+                      <Icons.ChevronRight className="text-muted-foreground size-5 shrink-0 rtl:rotate-180" />
                     </button>
                   </div>
                 )}
                 <div className="divide-border/70 divide-y">
                   {standardMenuItems.map((item) => {
-                    const isActive = isPathActive(location.pathname, item.href);
+                    const isActive = isItemActive(item.href);
 
                     return (
                       <Link
                         key={item.href}
                         to={item.href}
-                        onClick={() => {
-                          handleNavigation(item.href, isActive);
+                        onClick={(event) => {
+                          handleNavigation(event, item.href, isActive);
                           setMobileMenuOpen(false);
                         }}
                         aria-current={isActive ? "page" : undefined}
@@ -289,7 +324,7 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                         <span className="min-w-0 flex-1 truncate text-lg font-semibold">
                           {item.title}
                         </span>
-                        <Icons.ChevronRight className="text-muted-foreground/50 size-5 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                        <Icons.ChevronRight className="text-muted-foreground/50 size-5 shrink-0 transition-transform group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5" />
                       </Link>
                     );
                   })}
@@ -302,14 +337,14 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                     </div>
                     <div className="divide-border/70 divide-y">
                       {addonItems.map((item) => {
-                        const isActive = isPathActive(location.pathname, item.href);
+                        const isActive = isItemActive(item.href);
 
                         return (
                           <Link
                             key={item.href}
                             to={item.href}
-                            onClick={() => {
-                              handleNavigation(item.href, isActive);
+                            onClick={(event) => {
+                              handleNavigation(event, item.href, isActive);
                               setMobileMenuOpen(false);
                             }}
                             aria-current={isActive ? "page" : undefined}
@@ -324,7 +359,7 @@ export function MobileNavBar({ navigation }: MobileNavBarProps) {
                             <span className="min-w-0 flex-1 truncate text-lg font-semibold">
                               {item.title}
                             </span>
-                            <Icons.ChevronRight className="text-muted-foreground/50 size-5 shrink-0 transition-transform group-hover:translate-x-0.5" />
+                            <Icons.ChevronRight className="text-muted-foreground/50 size-5 shrink-0 transition-transform group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5" />
                           </Link>
                         );
                       })}

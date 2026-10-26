@@ -11,11 +11,11 @@ import {
   GainAmount,
   GainPercent,
   IntervalSelector,
-  getInitialIntervalData,
   useNumberFormatting,
   type TimePeriod,
 } from "@wealthfolio/ui";
-import { usePersistentState } from "@/hooks/use-persistent-state";
+import { SpendingDatePicker } from "@/features/spending/components/spending-date-picker";
+import { useDashboardPeriod } from "@/pages/dashboard/use-dashboard-period";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { Skeleton } from "@wealthfolio/ui/components/ui/skeleton";
 import {
@@ -50,6 +50,7 @@ import { NetWorthChart } from "./net-worth-chart";
 import { formatZonedDateKey } from "@/features/spending/lib/timezone";
 
 const DEFAULT_INTERVAL: TimePeriod = "ALL";
+// Read only until any dashboard tab picks a shared period.
 const INTERVAL_STORAGE_KEY = "networth-interval";
 const MS_PER_DAY = 86_400_000;
 
@@ -68,16 +69,13 @@ export function NetWorthContent() {
   });
   const isMobile = useIsMobileViewport();
 
-  const [periodCode, setPeriodCode] = usePersistentState<TimePeriod>(
-    INTERVAL_STORAGE_KEY,
-    DEFAULT_INTERVAL,
-  );
+  const period = useDashboardPeriod(currentDateISO, {
+    key: INTERVAL_STORAGE_KEY,
+    initial: DEFAULT_INTERVAL,
+  });
+  const { code: periodCode, range: dateRange } = period;
   // A local Date carries the configured calendar day for the date-only interval helper.
   const currentDate = useMemo(() => parseLocalDate(currentDateISO), [currentDateISO]);
-  const dateRange = useMemo(
-    () => getInitialIntervalData(periodCode, currentDate).range,
-    [periodCode, currentDate],
-  );
 
   // ISO date strings for the selected-range history query.
   const historyDates = useMemo(() => {
@@ -112,36 +110,33 @@ export function NetWorthContent() {
     enabled: !!longHistoryDates,
   });
 
-  const handleIntervalSelect = (code: TimePeriod) => {
-    setPeriodCode(code);
-  };
-
   const parsedData = useMemo((): ParsedNetWorth | null => {
     if (!netWorthData) return null;
     return {
-      netWorth: parseFloat(netWorthData.netWorth) || 0,
+      netWorth: netWorthData.netWorth,
       assets: {
-        total: parseFloat(netWorthData.assets.total) || 0,
+        total: netWorthData.assets.total,
         breakdown: (netWorthData.assets.breakdown || []).map((item) => ({
           category: item.category,
           name: getNetWorthCategoryLabel(t, item.category, item.name),
-          value: parseFloat(item.value) || 0,
+          value: item.value,
           assetId: item.assetId,
           children: (item.children ?? []).map((child) => ({
             category: child.category,
             name: child.name,
-            value: parseFloat(child.value) || 0,
+            value: child.value,
             assetId: child.assetId,
           })),
         })),
       },
       liabilities: {
-        total: parseFloat(netWorthData.liabilities.total) || 0,
+        total: netWorthData.liabilities.total,
         breakdown: (netWorthData.liabilities.breakdown || []).map((item) => ({
           category: item.category,
           name: item.name,
-          value: parseFloat(item.value) || 0,
+          value: item.value,
           assetId: item.assetId,
+          firstValueDate: item.firstValueDate,
         })),
       },
     };
@@ -187,8 +182,8 @@ export function NetWorthContent() {
 
   const currency = netWorthData?.currency || settings?.baseCurrency || "USD";
   const hasStaleValuations = netWorthData && netWorthData.staleAssets.length > 0;
-  const periodLabel = periodCode;
-  const localizedPeriodLabel = t(`ui:interval.${periodCode}`);
+  const periodLabel = periodCode ?? period.label;
+  const localizedPeriodLabel = period.label;
 
   // Breakdown row → detail drawer. Investments open the existing asset-class
   // allocation sheet; every other row opens the category detail sheet.
@@ -205,8 +200,8 @@ export function NetWorthContent() {
     return (
       <div className="flex min-h-[50vh] items-center justify-center p-8">
         <div className="text-center">
-          <div className="bg-destructive/10 mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full">
-            <Icons.AlertTriangle className="text-destructive h-6 w-6" />
+          <div className="text-destructive-subtle-foreground bg-current/15 mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full">
+            <Icons.AlertTriangle className="h-6 w-6" />
           </div>
           <p className="text-destructive text-lg font-medium">
             {t("insights:networth.failed_to_load")}
@@ -235,12 +230,14 @@ export function NetWorthContent() {
               {hasStaleValuations && (
                 <TooltipProvider>
                   <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="bg-warning/10 flex h-8 w-8 items-center justify-center rounded-full">
-                        <Icons.AlertCircle className="text-warning h-4 w-4" />
-                      </div>
+                    <TooltipTrigger
+                      render={
+                        <div className="text-warning-subtle-foreground bg-current/15 flex h-8 w-8 items-center justify-center rounded-full" />
+                      }
+                    >
+                      <Icons.AlertCircle className="h-4 w-4" />
                     </TooltipTrigger>
-                    <TooltipContent side="bottom" className="max-w-[280px]">
+                    <TooltipContent side="bottom" className="max-w-70">
                       <p className="mb-2 text-xs font-medium">
                         {t("insights:networth.stale_valuations_tooltip")}
                       </p>
@@ -251,7 +248,7 @@ export function NetWorthContent() {
                             className="flex items-center justify-between gap-2"
                           >
                             <span className="truncate">{asset.name ?? asset.assetId}</span>
-                            <span className="text-muted-foreground shrink-0">
+                            <span className="text-background/70 shrink-0">
                               {t("insights:networth.days_ago", { count: asset.daysStale })}
                             </span>
                           </li>
@@ -266,7 +263,7 @@ export function NetWorthContent() {
               {isHistoryLoading ? (
                 <div className="flex items-center gap-3 pt-1">
                   <Skeleton className="h-4 w-24" />
-                  <div className="border-secondary my-1 border-r pr-2" />
+                  <div className="border-secondary my-1 border-e pe-2" />
                   <Skeleton className="h-4 w-16" />
                 </div>
               ) : (
@@ -279,7 +276,7 @@ export function NetWorthContent() {
                   />
                   {showChangeRatio && (
                     <>
-                      <div className="border-secondary my-1 border-r pr-2" />
+                      <div className="border-secondary my-1 border-e pe-2" />
                       {isPlainPercent(netWorthChange.percent) ? (
                         <GainPercent
                           className="lg:text-md text-sm font-light"
@@ -301,11 +298,9 @@ export function NetWorthContent() {
                   )}
                 </>
               )}
-              {periodCode && (
-                <span className="lg:text-md text-muted-foreground ml-1 text-sm font-light">
-                  {t(`ui:interval.${periodCode}`)}
-                </span>
-              )}
+              <span className="lg:text-md text-muted-foreground ms-1 text-sm font-light">
+                {localizedPeriodLabel}
+              </span>
             </div>
           </div>
         </div>
@@ -319,7 +314,7 @@ export function NetWorthContent() {
         }}
       >
         {/* Chart section */}
-        <div className="h-[280px]">
+        <div className="h-70">
           {isHistoryLoading ? (
             <div className="flex h-full items-center justify-center">
               <Skeleton className="h-full w-full" />
@@ -336,12 +331,21 @@ export function NetWorthContent() {
           )}
           {historyData && historyData.length > 0 && (
             <div className="flex w-full justify-center">
-              <IntervalSelector
-                className="pointer-events-auto relative z-20 w-full max-w-screen-sm sm:max-w-screen-md md:max-w-2xl lg:max-w-3xl"
-                onIntervalSelect={handleIntervalSelect}
-                isLoading={isHistoryLoading}
-                value={periodCode}
-              />
+              <div className="pointer-events-auto relative z-20 flex w-full min-w-0 max-w-screen-sm items-center justify-center gap-1.5 pe-4 sm:max-w-screen-md md:max-w-2xl md:pe-0 lg:max-w-3xl">
+                <IntervalSelector
+                  className="w-auto"
+                  onIntervalSelect={period.selectPreset}
+                  isLoading={isHistoryLoading}
+                  value={periodCode}
+                />
+                <SpendingDatePicker
+                  customMonth={period.customMonth}
+                  customRange={period.customRange}
+                  maxMonth={period.maxMonth}
+                  onCustomMonthChange={period.selectMonth}
+                  onCustomRangeChange={period.selectRange}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -372,7 +376,7 @@ export function NetWorthContent() {
                 />
               ) : (
                 <div
-                  className="rounded-xl border border-orange-200/50 p-6 text-center md:p-8 dark:border-orange-800/50"
+                  className="border-warning-subtle-border rounded-xl border p-6 text-center md:p-8"
                   style={{ backgroundColor: THEME_COLOR_LIGHT }}
                 >
                   <p className="text-sm">{t("insights:networth.no_assets_found")}</p>
@@ -381,7 +385,7 @@ export function NetWorthContent() {
                     className="text-muted-foreground hover:text-foreground mt-2 inline-flex items-center gap-1 text-xs underline-offset-4 hover:underline"
                   >
                     {t("insights:networth.add_first_asset")}
-                    <Icons.ChevronRight className="h-3 w-3" />
+                    <Icons.ChevronRight className="h-3 w-3 rtl:rotate-180" />
                   </Link>
                 </div>
               )}

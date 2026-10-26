@@ -5,7 +5,7 @@ import { Icons } from "@wealthfolio/ui/components/ui/icons";
 import { Alert, AlertDescription, AlertTitle } from "@wealthfolio/ui/components/ui/alert";
 
 import { useMemo, useCallback, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useBackNavigation } from "@/pages/layouts/mobile-stack/use-mobile-stack";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -28,6 +28,7 @@ import {
 import { HoldingsFormat } from "./holdings-mapping-step";
 import type { HoldingsSnapshotInput, ImportHoldingsCsvResult } from "@/lib/types";
 import { ImportType } from "@/lib/types";
+import { Spinner } from "@wealthfolio/ui";
 
 interface PersistedSymbolResolution {
   symbol: string;
@@ -72,7 +73,7 @@ export function HoldingsConfirmStep() {
     pendingImportAssets,
     assetPreviewItems,
   } = state;
-  const navigate = useNavigate();
+  const goBack = useBackNavigation();
   const { t } = useTranslation();
   const [prepareError, setPrepareError] = useState<string | null>(null);
   const [isPreparingAssets, setIsPreparingAssets] = useState(false);
@@ -409,8 +410,8 @@ export function HoldingsConfirmStep() {
   ]);
 
   const handleCancel = useCallback(() => {
-    navigate(-1);
-  }, [navigate]);
+    goBack();
+  }, [goBack]);
 
   const isImporting = isImportPending || isPreparingAssets;
   const totalPositions = snapshots.reduce((sum, s) => sum + s.positions.length, 0);
@@ -494,14 +495,14 @@ export function HoldingsConfirmStep() {
         <Button onClick={handleImport} disabled={isImporting || snapshots.length === 0}>
           {isImporting ? (
             <>
-              <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
+              <Spinner className="me-2 h-4 w-4" />
               {isPreparingAssets
                 ? t("activity:import.holdings.preparingAssets")
                 : t("activity:import.holdings.importing")}
             </>
           ) : (
             <>
-              <Icons.Upload className="mr-2 h-4 w-4" />
+              <Icons.Upload className="me-2 h-4 w-4" />
               {t("activity:import.holdings.importSnapshots", { count: snapshots.length })}
             </>
           )}

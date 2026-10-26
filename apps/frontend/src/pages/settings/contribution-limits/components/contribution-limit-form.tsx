@@ -1,8 +1,8 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, useWatch } from "react-hook-form";
+import { useMemo } from "react";
+import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import * as z from "zod";
-import { useEffect } from "react";
 
 import { Button } from "@wealthfolio/ui/components/ui/button";
 import { Icons } from "@wealthfolio/ui/components/ui/icons";
@@ -23,9 +23,11 @@ import {
   FormDescription,
   DatePickerInput,
   Input,
+  Spinner,
 } from "@wealthfolio/ui";
 
-import { newContributionLimitSchema } from "@/lib/schemas";
+import { useEffectOnChange } from "@/hooks/use-effect-on-change";
+import { createContributionLimitSchema, newContributionLimitSchema } from "@/lib/schemas";
 import { useContributionLimitMutations } from "../use-contribution-limit-mutations";
 import { MoneyInput } from "@wealthfolio/ui";
 
@@ -48,8 +50,10 @@ export function ContributionLimitForm({
   const { addContributionLimitMutation, updateContributionLimitMutation } =
     useContributionLimitMutations();
 
+  const schema = useMemo(() => createContributionLimitSchema(t), [t]);
+
   const form = useForm<NewContributionLimit>({
-    resolver: zodResolver(newContributionLimitSchema),
+    resolver: zodResolver(schema) as Resolver<NewContributionLimit>,
     defaultValues: {
       ...defaultValues,
       startDate: defaultValues?.startDate ? new Date(defaultValues.startDate) : undefined,
@@ -76,13 +80,13 @@ export function ContributionLimitForm({
   });
 
   // Update dates when year changes
-  useEffect(() => {
+  useEffectOnChange(() => {
     if (contributionYear) {
       updateDatesBasedOnYear(contributionYear);
     }
   }, [contributionYear]);
 
-  function onSubmit(data: NewContributionLimit) {
+  async function onSubmit(data: NewContributionLimit) {
     const { id, ...rest } = data;
 
     // Convert date objects to ISO strings (RFC 3339 compatible format)
@@ -92,13 +96,19 @@ export function ContributionLimitForm({
       endDate: rest.endDate instanceof Date ? rest.endDate.toISOString() : rest.endDate,
     };
 
-    if (id) {
-      return updateContributionLimitMutation.mutate(
-        { id, updatedLimit: formattedData },
-        { onSuccess },
-      );
+    // Finishes once the save itself ends rather than from a callback passed to
+    // mutate(): React Query skips those while a phone screen is out of sight,
+    // which left the form open, ready to add the limit a second time.
+    try {
+      if (id) {
+        await updateContributionLimitMutation.mutateAsync({ id, updatedLimit: formattedData });
+      } else {
+        await addContributionLimitMutation.mutateAsync(formattedData);
+      }
+      onSuccess();
+    } catch {
+      // The mutation reports the error; the form stays open to try again.
     }
-    return addContributionLimitMutation.mutate(formattedData, { onSuccess });
   }
 
   return (
@@ -130,7 +140,7 @@ export function ContributionLimitForm({
                   name="groupName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-base font-medium">
+                      <FormLabel className="text-base font-medium leading-none">
                         {t("settings:limits_form_group_name_label")}
                       </FormLabel>
                       <FormControl>
@@ -153,7 +163,7 @@ export function ContributionLimitForm({
                   name="limitAmount"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-base font-medium">
+                      <FormLabel className="text-base font-medium leading-none">
                         {t("settings:limits_form_limit_amount_label")}
                       </FormLabel>
                       <FormControl>
@@ -177,19 +187,15 @@ export function ContributionLimitForm({
                       name="contributionYear"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-base font-medium">
+                          <FormLabel className="text-base font-medium leading-none">
                             {t("settings:limits_form_year_label")}
                           </FormLabel>
                           <FormControl>
-                            <Input
-                              type="number"
+                            <MoneyInput
                               placeholder={t("settings:limits_form_year_placeholder")}
-                              value={field.value || ""}
-                              onChange={(e) => {
-                                const numValue =
-                                  e.target.value === "" ? undefined : Number(e.target.value);
-                                field.onChange(numValue);
-                              }}
+                              maxDecimalPlaces={0}
+                              value={field.value}
+                              onValueChange={(value) => field.onChange(value)}
                             />
                           </FormControl>
 
@@ -203,7 +209,7 @@ export function ContributionLimitForm({
                       name="startDate"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-base font-medium">
+                          <FormLabel className="text-base font-medium leading-none">
                             {t("settings:limits_form_start_date_label")}
                           </FormLabel>
                           <div className="h-11">
@@ -225,7 +231,7 @@ export function ContributionLimitForm({
                       name="endDate"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-base font-medium">
+                          <FormLabel className="text-base font-medium leading-none">
                             {t("settings:limits_form_end_date_label")}
                           </FormLabel>
                           <div className="h-11">
@@ -254,10 +260,12 @@ export function ContributionLimitForm({
 
         <DialogFooter className="px-1 pt-2">
           <div className="flex w-full justify-end gap-3">
-            <DialogTrigger asChild>
-              <Button variant="outline" type="button" className="h-11 min-w-24 text-base">
-                {t("common:cancel")}
-              </Button>
+            <DialogTrigger
+              render={
+                <Button variant="outline" type="button" className="h-11 min-w-24 text-base" />
+              }
+            >
+              {t("common:cancel")}
             </DialogTrigger>
             <Button
               type="submit"
@@ -269,14 +277,14 @@ export function ContributionLimitForm({
               {addContributionLimitMutation.isPending ||
               updateContributionLimitMutation.isPending ? (
                 <>
-                  <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
+                  <Spinner className="me-2 h-4 w-4" />
                   {defaultValues?.id
                     ? t("settings:limits_form_updating")
                     : t("settings:limits_form_saving")}
                 </>
               ) : (
                 <>
-                  <Icons.Check className="mr-2 h-4 w-4" />
+                  <Icons.Check className="me-2 h-4 w-4" />
                   {defaultValues?.id
                     ? t("settings:limits_form_update_button")
                     : t("settings:limits_form_save_button")}
