@@ -968,7 +968,6 @@
     "deleteGroupWithCategories_one": "含まれる{{count}}カテゴリとその予算は「その他」に移動されます。グループ予備枠はすべての月について合算されます。この操作は取り消せません。",
     "deleteGroupWithCategories_other": "含まれる{{count}}カテゴリとその予算は「その他」に移動されます。グループ予備枠はすべての月について合算されます。この操作は取り消せません。",
     "deleteGroupRolloverBlocked": "このグループには繰越設定が保存されているため、繰越がオフになっていても削除できません。",
-    "cannotUndo": "ÒüôÒü«µôìõ¢£Òü»ÕÅûÒéèµÂêÒüøÒü¥ÒüøÒéôÒÇé",
     "deleting": "削除中...",
     "addCategory": "カテゴリを追加",
     "noOtherCategories": "他に利用できるカテゴリはありません。作成先:",

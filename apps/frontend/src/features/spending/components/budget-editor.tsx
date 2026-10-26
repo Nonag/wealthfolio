@@ -651,11 +651,9 @@ function GroupBudgetSection({
                 {t("spending:budgetEditor.deleteGroupTitle", { name: row.group.name })}
               </AlertDialogTitle>
               <AlertDialogDescription>
-                {row.categories.length > 0
-                  ? t("spending:budgetEditor.deleteGroupWithCategories", {
-                      count: row.categories.length,
-                    })
-                  : t("spending:budgetEditor.cannotUndo")}
+                {t("spending:budgetEditor.deleteGroupWithCategories", {
+                  count: row.categories.length,
+                })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
