@@ -66,7 +66,7 @@ export function MappingHeaderCell({
   const mappedHeader = mapping.fieldMappings[field];
   const isMultiColumn = field === ImportFormat.COMMENT;
   const mappedHeaders = (Array.isArray(mappedHeader) ? mappedHeader : [mappedHeader]).filter(
-    (header): header is string => Boolean(header) && headers.includes(header as string),
+    (header): header is string => Boolean(header) && headers.includes(header),
   );
   const displayHeader = isMultiColumn
     ? mappedHeaders.join(", ")
@@ -200,25 +200,21 @@ function MultiColumnSelect({
         else onClose();
       }}
     >
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded
-          className={cn(MAPPING_TRIGGER_CLASS, "text-muted-foreground w-full justify-between")}
-        >
-          <span className="truncate">
-            {selected.length > 0 ? selected.join(", ") : placeholder}
-          </span>
-          <Icons.ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="w-auto min-w-[200px] p-0"
-        align="start"
-        onOpenAutoFocus={(e) => e.preventDefault()}
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded
+            className={cn(MAPPING_TRIGGER_CLASS, "text-muted-foreground w-full justify-between")}
+          />
+        }
       >
+        <span className="truncate">{selected.length > 0 ? selected.join(", ") : placeholder}</span>
+        <Icons.ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+      </PopoverTrigger>
+      <PopoverContent className="w-auto min-w-[200px] p-0" align="start" initialFocus={false}>
         <Command>
           <CommandList className="max-h-[300px]">
             <CommandGroup>
