@@ -967,6 +967,7 @@
     "deleteGroupTitle": "{{name}}을(를) 삭제하시겠습니까?",
     "deleteGroupWithCategories_one": "카테고리 {{count}}개와 해당 예산이 ‘기타’ 그룹으로 이동됩니다. 모든 달의 그룹 버퍼 금액이 합산됩니다. 이 작업은 되돌릴 수 없습니다.",
     "deleteGroupWithCategories_other": "카테고리 {{count}}개와 해당 예산이 ‘기타’ 그룹으로 이동됩니다. 모든 달의 그룹 버퍼 금액이 합산됩니다. 이 작업은 되돌릴 수 없습니다.",
+    "deleteGroupWithCategories_zero": "모든 달의 그룹 버퍼 금액이 ‘기타’ 그룹에 합산됩니다. 이 작업은 되돌릴 수 없습니다.",
     "deleteGroupRolloverBlocked": "이 그룹에는 저장된 이월 설정이 있어 이월이 꺼져 있어도 삭제할 수 없습니다.",
     "deleting": "삭제 중...",
     "addCategory": "카테고리 추가",

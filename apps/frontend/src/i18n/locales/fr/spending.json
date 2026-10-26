@@ -1030,6 +1030,7 @@
     "deleteGroupTitle": "Supprimer {{name}} ?",
     "deleteGroupWithCategories_one": "Sa {{count}} catégorie et son budget seront déplacés vers « Autre ». Les marges de groupe seront additionnées pour tous les mois. Cette action est irréversible.",
     "deleteGroupWithCategories_other": "Ses {{count}} catégories et leurs budgets seront déplacés vers « Autre ». Les marges de groupe seront additionnées pour tous les mois. Cette action est irréversible.",
+    "deleteGroupWithCategories_zero": "Ses marges de groupe seront additionnées à « Autre » pour tous les mois. Cette action est irréversible.",
     "deleteGroupWithCategories_many": "Ses {{count}} catégories et leurs budgets seront déplacés vers « Autre ». Les marges de groupe seront additionnées pour tous les mois. Cette action est irréversible.",
     "deleteGroupRolloverBlocked": "Ce groupe ne peut pas être supprimé car un paramètre de report est enregistré pour celui-ci, même si le report est désactivé.",
     "deleting": "Suppression...",

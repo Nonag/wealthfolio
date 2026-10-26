@@ -1031,6 +1031,7 @@
     "deleteGroupWithCategories_one": "La sua {{count}} categoria e il relativo budget verranno spostati in «Altro». I margini di gruppo verranno sommati per tutti i mesi. Questa operazione non può essere annullata.",
     "deleteGroupWithCategories_many": "Le sue {{count}} categorie e i relativi budget verranno spostati in «Altro». I margini di gruppo verranno sommati per tutti i mesi. Questa operazione non può essere annullata.",
     "deleteGroupWithCategories_other": "Le sue {{count}} categorie e i relativi budget verranno spostati in «Altro». I margini di gruppo verranno sommati per tutti i mesi. Questa operazione non può essere annullata.",
+    "deleteGroupWithCategories_zero": "I suoi margini di gruppo verranno sommati in «Altro» per tutti i mesi. Questa operazione non può essere annullata.",
     "deleteGroupRolloverBlocked": "Questo gruppo non può essere eliminato perché ha un'impostazione di riporto salvata, anche se il riporto è disattivato.",
     "deleting": "Eliminazione...",
     "addCategory": "Aggiungi categoria",
