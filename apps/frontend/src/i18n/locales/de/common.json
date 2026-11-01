@@ -602,7 +602,6 @@
     "failed_to_create_budget_group": "Budgetgruppe konnte nicht erstellt werden.",
     "failed_to_update_budget_group": "Die Budgetgruppe konnte nicht aktualisiert werden.",
     "failed_to_move_category": "Kategorie konnte nicht verschoben werden.",
-    "failed_to_reset_budget_groups": "Budgetgruppen konnten nicht zurückgesetzt werden.",
     "plan_copied": "Plan kopiert.",
     "spending_settings_updated": "Ausgabeneinstellungen aktualisiert.",
     "failed_to_update_spending_settings": "Die Ausgabeneinstellungen konnten nicht aktualisiert werden.",

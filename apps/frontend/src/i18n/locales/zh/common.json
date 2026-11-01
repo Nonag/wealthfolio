@@ -592,7 +592,6 @@
     "failed_to_create_budget_group": "创建预算组失败。",
     "failed_to_update_budget_group": "无法更新预算组。",
     "failed_to_move_category": "无法移动类别。",
-    "failed_to_reset_budget_groups": "无法重置预算组。",
     "plan_copied": "计划已复制。",
     "spending_settings_updated": "支出设置已更新。",
     "failed_to_update_spending_settings": "无法更新支出设置。",

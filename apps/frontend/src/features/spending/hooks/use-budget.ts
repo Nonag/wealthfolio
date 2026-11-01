@@ -12,7 +12,6 @@ import {
   deleteBudgetRolloverSetting,
   deleteBudgetTarget,
   getBudget,
-  resetBudgetGroups,
   updateBudgetGroup,
   upsertBudgetRolloverSetting,
   upsertBudgetTarget,
@@ -98,12 +97,6 @@ export function useBudgetMutations(periodKey?: string) {
     onError: () => toast.error(i18n.t("common:notifications.failed_to_move_category")),
   });
 
-  const resetGroups = useMutation({
-    mutationFn: () => resetBudgetGroups(periodKey),
-    onSuccess: invalidate,
-    onError: () => toast.error(i18n.t("common:notifications.failed_to_reset_budget_groups")),
-  });
-
   const copyFromMonth = useMutation({
     mutationFn: ({
       sourcePeriodKey,
@@ -135,7 +128,6 @@ export function useBudgetMutations(periodKey?: string) {
     updateGroup,
     removeGroup,
     assignCategory,
-    resetGroups,
     copyFromMonth,
   };
 }

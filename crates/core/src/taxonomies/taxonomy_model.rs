@@ -216,15 +216,14 @@ pub struct CategoryReferences {
     pub automatic_budget_links: usize,
 }
 impl CategoryReferences {
+    /// References that keep a category (and its subcategories) from being deleted.
+    /// Subcategories, rollover settings and budget group links are removed with it.
     pub fn blocking_count(&self) -> usize {
-        self.children
-            + self.asset_assignments
+        self.asset_assignments
             + self.spending_assignments
             + self.splits
             + self.rules
             + self.budget_targets
-            + self.budget_rollovers
-            + self.budget_group_assignments
             + self.allocation_targets
     }
 }

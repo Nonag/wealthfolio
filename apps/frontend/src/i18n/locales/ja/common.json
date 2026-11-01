@@ -592,7 +592,6 @@
     "failed_to_create_budget_group": "予算グループの作成に失敗しました。",
     "failed_to_update_budget_group": "予算グループを更新できませんでした。",
     "failed_to_move_category": "カテゴリの移動に失敗しました。",
-    "failed_to_reset_budget_groups": "予算グループをリセットできませんでした。",
     "plan_copied": "計画がコピーされました。",
     "spending_settings_updated": "支出設定が更新されました。",
     "failed_to_update_spending_settings": "支出設定を更新できませんでした。",

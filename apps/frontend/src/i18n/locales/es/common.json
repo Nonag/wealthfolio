@@ -618,7 +618,6 @@
     "failed_to_create_budget_group": "No se pudo crear el grupo de presupuesto.",
     "failed_to_update_budget_group": "No se pudo actualizar el grupo de presupuesto.",
     "failed_to_move_category": "No se pudo mover la categoría.",
-    "failed_to_reset_budget_groups": "No se pudieron restablecer los grupos de presupuesto.",
     "plan_copied": "Plano copiado.",
     "spending_settings_updated": "Configuración de gastos actualizada.",
     "failed_to_update_spending_settings": "No se pudo actualizar la configuración de gastos.",
