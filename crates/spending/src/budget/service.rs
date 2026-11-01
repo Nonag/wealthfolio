@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
@@ -32,6 +32,7 @@ const INCOME_TAXONOMY: &str = "income_sources";
 const SAVINGS_TAXONOMY: &str = "savings_categories";
 const DEFAULT_PERIOD_KEY: &str = "default";
 const OTHER_GROUP_KEY: &str = "other";
+const OTHER_RENAME_ERROR: &str = "The \"Other\" budget group cannot be renamed";
 
 #[derive(Clone, Copy)]
 struct DefaultGroup {
@@ -612,6 +613,16 @@ impl BudgetService {
         currency: &str,
         timezone: &str,
     ) -> Result<BudgetSnapshot> {
+        if patch.name.is_some()
+            && self
+                .repo
+                .list_groups()
+                .await?
+                .iter()
+                .any(|g| g.id == id && g.key == OTHER_GROUP_KEY)
+        {
+            return Err(invalid_budget_input(OTHER_RENAME_ERROR));
+        }
         self.repo.update_group(id, patch).await?;
         self.get(period_key, currency, timezone).await
     }
@@ -629,9 +640,9 @@ impl BudgetService {
             .iter()
             .find(|g| g.id == id)
             .ok_or_else(|| invalid_budget_input("Budget group not found"))?;
-        if group.is_system {
+        if group.key == OTHER_GROUP_KEY {
             return Err(SpendingError::InvalidInput {
-                message: "System budget groups cannot be deleted".to_string(),
+                message: "The \"Other\" budget group cannot be deleted".to_string(),
             }
             .into());
         }
@@ -689,24 +700,6 @@ impl BudgetService {
                 taxonomy_id: SPENDING_TAXONOMY.to_string(),
                 category_id,
             })
-            .await?;
-        self.get(period_key, currency, timezone).await
-    }
-
-    pub async fn reset_groups(
-        &self,
-        period_key: Option<String>,
-        currency: &str,
-        timezone: &str,
-    ) -> Result<BudgetSnapshot> {
-        let groups = self
-            .repo
-            .upsert_system_groups(default_group_inputs())
-            .await?;
-        let group_by_key: HashMap<String, String> =
-            groups.into_iter().map(|g| (g.key, g.id)).collect();
-        self.repo
-            .upsert_system_group_assignments(default_assignment_inputs(&group_by_key))
             .await?;
         self.get(period_key, currency, timezone).await
     }
@@ -961,17 +954,28 @@ impl BudgetService {
                         "Provide an existing group and a nonempty name",
                     ));
                 }
+                if changes.name.is_some()
+                    && state
+                        .groups
+                        .iter()
+                        .any(|g| g.id == *id && g.key == OTHER_GROUP_KEY)
+                {
+                    return Err(invalid_budget_input(OTHER_RENAME_ERROR));
+                }
             }
             DeleteGroup {
                 id,
                 reassign_to_group_id,
             } => {
-                if !state.groups.iter().any(|g| g.id == *id && !g.is_system)
+                if !state
+                    .groups
+                    .iter()
+                    .any(|g| g.id == *id && g.key != OTHER_GROUP_KEY)
                     || id == reassign_to_group_id
                     || !has_group(reassign_to_group_id)
                 {
                     return Err(invalid_budget_input(
-                        "Only custom groups can be deleted; select a different destination group",
+                        "The \"Other\" group cannot be deleted; select a different destination group",
                     ));
                 }
                 if state
@@ -1051,21 +1055,7 @@ impl BudgetService {
     }
 
     async fn ensure_system_groups(&self) -> Result<()> {
-        let existing_keys: HashSet<String> = self
-            .repo
-            .list_groups()
-            .await?
-            .into_iter()
-            .map(|g| g.key)
-            .collect();
-        let missing = default_group_inputs()
-            .into_iter()
-            .filter(|g| {
-                g.key
-                    .as_ref()
-                    .is_some_and(|key| !existing_keys.contains(key))
-            })
-            .collect::<Vec<_>>();
+        let missing = missing_default_groups(&self.repo.list_groups().await?);
         if !missing.is_empty() {
             self.repo.upsert_system_groups(missing).await?;
         }
@@ -1427,13 +1417,17 @@ fn compute_rollover_for_month(
 }
 
 /// One pure default resolution for Budget and Insight. Persisted user edits and
-/// custom groups remain authoritative; synthesize only absent system keys.
+/// custom groups remain authoritative. Defaults are synthesized only for an
+/// unseeded budget; once groups exist, deleted defaults stay deleted and only
+/// the catch-all "Other" group is guaranteed.
 /// Epoch timestamps identify definitions without pretending a read persisted them.
 pub fn effective_groups(mut groups: Vec<BudgetGroup>) -> Vec<BudgetGroup> {
+    let seeded = !groups.is_empty();
     for default in DEFAULT_GROUPS {
-        if groups
-            .iter()
-            .any(|group| group.key == default.key || group.id == default.id)
+        if (seeded && default.key != OTHER_GROUP_KEY)
+            || groups
+                .iter()
+                .any(|group| group.key == default.key || group.id == default.id)
         {
             continue;
         }
@@ -1450,6 +1444,19 @@ pub fn effective_groups(mut groups: Vec<BudgetGroup>) -> Vec<BudgetGroup> {
         });
     }
     groups
+}
+
+/// Default groups that `effective_groups` synthesizes but are not persisted yet.
+pub fn missing_default_groups(persisted: &[BudgetGroup]) -> Vec<NewBudgetGroup> {
+    let synthesized = effective_groups(persisted.to_vec());
+    default_group_inputs()
+        .into_iter()
+        .filter(|g| {
+            let id = g.id.as_deref();
+            synthesized.iter().any(|s| Some(s.id.as_str()) == id)
+                && !persisted.iter().any(|p| Some(p.id.as_str()) == id)
+        })
+        .collect()
 }
 
 pub fn default_group_inputs() -> Vec<NewBudgetGroup> {
@@ -2058,7 +2065,7 @@ mod tests {
     }
 
     #[test]
-    fn pure_group_resolution_fills_only_missing_defaults_and_preserves_custom_edits() {
+    fn pure_group_resolution_keeps_deleted_defaults_and_preserves_custom_edits() {
         let defaults = effective_groups(Vec::new());
         assert_eq!(defaults.len(), DEFAULT_GROUPS.len());
         for removed in [
@@ -2081,7 +2088,8 @@ mod tests {
             custom.is_system = false;
             persisted.push(custom);
             let resolved = effective_groups(persisted.clone());
-            assert_eq!(resolved.len(), DEFAULT_GROUPS.len() + 1);
+            let other_restored = usize::from(removed.contains(&OTHER_GROUP_KEY));
+            assert_eq!(resolved.len(), persisted.len() + other_restored);
             for original in persisted {
                 let found = resolved
                     .iter()

@@ -666,7 +666,6 @@
     "security_delete_error_description": "La sécurité n'a pas pu être supprimée pour le moment.",
     "security_added": "{{name}} a été ajouté.",
     "failed_to_move_category": "Échec du déplacement de la catégorie.",
-    "failed_to_reset_budget_groups": "Échec de la réinitialisation des groupes budgétaires.",
     "plan_copied": "Plan copié.",
     "spending_settings_updated": "Paramètres de dépenses mis à jour.",
     "failed_to_update_spending_settings": "Échec de la mise à jour des paramètres de dépenses.",

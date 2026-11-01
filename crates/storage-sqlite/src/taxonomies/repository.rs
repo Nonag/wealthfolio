@@ -25,6 +25,7 @@ use crate::errors::StorageError;
 use crate::schema::{
     allocation_target_weights, asset_taxonomy_assignments, taxonomies, taxonomy_categories,
 };
+use crate::spending::budget::{BudgetGroupAssignmentDB, BudgetRolloverSettingDB};
 
 pub struct TaxonomyRepository {
     pool: Arc<Pool<r2d2::ConnectionManager<SqliteConnection>>>,
@@ -55,24 +56,32 @@ struct CategoryReferencesDB {
     automatic_budget_links: i64,
 }
 
+// Covers the category and every descendant, matching the FK cascade on delete.
+const CATEGORY_SUBTREE: &str = "WITH RECURSIVE subtree(taxonomy_id, id) AS (
+        SELECT taxonomy_id, id FROM taxonomy_categories WHERE taxonomy_id = ?1 AND id = ?2
+        UNION
+        SELECT c.taxonomy_id, c.id FROM taxonomy_categories c
+        JOIN subtree s ON c.taxonomy_id = s.taxonomy_id AND c.parent_id = s.id
+    )";
+
 fn category_references(
     conn: &mut SqliteConnection,
     taxonomy_id: &str,
     category_id: &str,
 ) -> Result<CategoryReferences> {
-    let row = diesel::sql_query(
-        "SELECT
+    let row = diesel::sql_query(format!(
+        "{CATEGORY_SUBTREE} SELECT
             (SELECT COUNT(*) FROM taxonomy_categories WHERE taxonomy_id = ?1 AND parent_id = ?2) AS children,
-            (SELECT COUNT(*) FROM asset_taxonomy_assignments WHERE taxonomy_id = ?1 AND category_id = ?2) AS asset_assignments,
-            (SELECT COUNT(*) FROM activity_taxonomy_assignments WHERE taxonomy_id = ?1 AND category_id = ?2) AS spending_assignments,
-            (SELECT COUNT(*) FROM spending_activity_splits WHERE taxonomy_id = ?1 AND category_id = ?2) AS splits,
-            (SELECT COUNT(*) FROM spending_categorization_rules WHERE taxonomy_id = ?1 AND category_id = ?2) AS rules,
-            (SELECT COUNT(*) FROM budget_targets WHERE taxonomy_id = ?1 AND category_id = ?2) AS budget_targets,
-            (SELECT COUNT(*) FROM budget_rollover_settings WHERE taxonomy_id = ?1 AND category_id = ?2) AS budget_rollovers,
-            (SELECT COUNT(*) FROM budget_group_assignments WHERE taxonomy_id = ?1 AND category_id = ?2 AND (is_system = 0 OR updated_at != created_at)) AS budget_group_assignments,
-            (SELECT COUNT(*) FROM allocation_target_weights WHERE taxonomy_id = ?1 AND category_id = ?2) AS allocation_targets,
-            (SELECT COUNT(*) FROM budget_group_assignments WHERE taxonomy_id = ?1 AND category_id = ?2 AND is_system = 1 AND updated_at = created_at) AS automatic_budget_links"
-    ).bind::<Text,_>(taxonomy_id).bind::<Text,_>(category_id).get_result::<CategoryReferencesDB>(conn).map_err(StorageError::from)?;
+            (SELECT COUNT(*) FROM asset_taxonomy_assignments WHERE (taxonomy_id, category_id) IN subtree) AS asset_assignments,
+            (SELECT COUNT(*) FROM activity_taxonomy_assignments WHERE (taxonomy_id, category_id) IN subtree) AS spending_assignments,
+            (SELECT COUNT(*) FROM spending_activity_splits WHERE (taxonomy_id, category_id) IN subtree) AS splits,
+            (SELECT COUNT(*) FROM spending_categorization_rules WHERE (taxonomy_id, category_id) IN subtree) AS rules,
+            (SELECT COUNT(*) FROM budget_targets WHERE (taxonomy_id, category_id) IN subtree) AS budget_targets,
+            (SELECT COUNT(*) FROM budget_rollover_settings WHERE (taxonomy_id, category_id) IN subtree) AS budget_rollovers,
+            (SELECT COUNT(*) FROM budget_group_assignments WHERE (taxonomy_id, category_id) IN subtree AND (is_system = 0 OR updated_at != created_at)) AS budget_group_assignments,
+            (SELECT COUNT(*) FROM allocation_target_weights WHERE (taxonomy_id, category_id) IN subtree) AS allocation_targets,
+            (SELECT COUNT(*) FROM budget_group_assignments WHERE (taxonomy_id, category_id) IN subtree AND is_system = 1 AND updated_at = created_at) AS automatic_budget_links"
+    )).bind::<Text,_>(taxonomy_id).bind::<Text,_>(category_id).get_result::<CategoryReferencesDB>(conn).map_err(StorageError::from)?;
     Ok(CategoryReferences {
         children: row.children.max(0) as usize,
         asset_assignments: row.asset_assignments.max(0) as usize,
@@ -263,6 +272,30 @@ impl TaxonomyRepository {
                 }
                 // Untouched automatic group links have no user data/outbox and
                 // their existing FK cascade removes them atomically with the category.
+                // Rollovers and edited group links cascade too; sync their removal.
+                #[derive(QueryableByName)]
+                struct CascadedId {
+                    #[diesel(sql_type = Text)]
+                    id: String,
+                }
+                let cascaded = |conn: &mut SqliteConnection, table_filter: &str| {
+                    diesel::sql_query(format!(
+                        "{CATEGORY_SUBTREE} SELECT id FROM {table_filter} AND (taxonomy_id, category_id) IN subtree"
+                    ))
+                    .bind::<Text, _>(&taxonomy_id)
+                    .bind::<Text, _>(&category_id)
+                    .load::<CascadedId>(conn)
+                    .map_err(StorageError::from)
+                };
+                for row in cascaded(conn, "budget_rollover_settings WHERE target_type = 'category'")? {
+                    projection.capture_delete::<BudgetRolloverSettingDB>(row.id);
+                }
+                for row in cascaded(
+                    conn,
+                    "budget_group_assignments WHERE (is_system = 0 OR updated_at != created_at)",
+                )? {
+                    projection.capture_delete::<BudgetGroupAssignmentDB>(row.id);
+                }
                 // Check eligibility before the delete
                 let is_custom = sync::is_syncable_taxonomy(conn, &taxonomy_id);
 
@@ -437,12 +470,7 @@ impl TaxonomyRepositoryTrait for TaxonomyRepository {
         category_id: &str,
     ) -> Result<usize> {
         let refs = self.get_category_references(taxonomy_id, category_id)?;
-        Ok(refs.spending_assignments
-            + refs.splits
-            + refs.rules
-            + refs.budget_targets
-            + refs.budget_rollovers
-            + refs.budget_group_assignments)
+        Ok(refs.spending_assignments + refs.splits + refs.rules + refs.budget_targets)
     }
 
     fn get_category_allocation_target_weight_count(

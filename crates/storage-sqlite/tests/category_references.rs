@@ -97,22 +97,28 @@ async fn split_references_prevent_cascading_allocation_loss() {
 }
 
 #[tokio::test]
-async fn explicit_budget_group_configuration_is_protected() {
+async fn explicit_budget_group_configuration_is_removed_with_category() {
     let fixture = Fixture::new().await;
     fixture.seed(
         "INSERT INTO budget_group_assignments (id,group_id,taxonomy_id,category_id,is_system)
         VALUES ('manual','032ecb02-5912-42e8-9724-2cd566fc08d5','spending_categories','custom',0)",
     );
-    assert!(fixture
-        .service
-        .delete_category("spending_categories", "custom")
-        .await
-        .is_err());
-    assert!(fixture
-        .repo
-        .delete_category("spending_categories", "custom")
-        .await
-        .is_err());
+    assert_eq!(
+        fixture
+            .service
+            .delete_category("spending_categories", "custom")
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        fixture
+            .repo
+            .get_category_references("spending_categories", "custom")
+            .unwrap()
+            .budget_group_assignments,
+        0
+    );
 }
 
 #[tokio::test]
@@ -125,11 +131,12 @@ async fn edited_seed_link_is_user_configuration() {
         .unwrap();
     assert_eq!(refs.budget_group_assignments, 1);
     assert_eq!(refs.automatic_budget_links, 0);
+    assert_eq!(refs.blocking_count(), 0);
     assert!(f
         .repo
         .delete_category("spending_categories", "custom")
         .await
-        .is_err());
+        .is_ok());
 }
 
 #[tokio::test]

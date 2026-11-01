@@ -281,18 +281,6 @@ impl TaxonomyServiceTrait for TaxonomyService {
     }
 
     async fn delete_category(&self, taxonomy_id: &str, category_id: &str) -> Result<usize> {
-        // Check for child categories
-        let categories = self.repository.get_categories(taxonomy_id)?;
-        let has_children = categories
-            .iter()
-            .any(|c| c.parent_id.as_deref() == Some(category_id));
-        if has_children {
-            return Err(ValidationError::InvalidInput(
-                "Cannot delete category with children".to_string(),
-            )
-            .into());
-        }
-
         // Check for assignments
         let assignments = self
             .repository

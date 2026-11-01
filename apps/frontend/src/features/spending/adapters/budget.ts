@@ -123,15 +123,6 @@ export const assignCategoryToGroup = async (
   }
 };
 
-export const resetBudgetGroups = async (periodKey?: string): Promise<BudgetSnapshot> => {
-  try {
-    return await invoke<BudgetSnapshot>("reset_budget_groups", { periodKey });
-  } catch (e) {
-    logger.error("Error resetting budget groups.");
-    throw e;
-  }
-};
-
 export const copyBudgetTargets = async (
   sourcePeriodKey: string,
   targetPeriodKey: string,

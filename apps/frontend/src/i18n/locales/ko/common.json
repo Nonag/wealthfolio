@@ -592,7 +592,6 @@
     "failed_to_create_budget_group": "예산 그룹을 생성하지 못했습니다.",
     "failed_to_update_budget_group": "예산 그룹을 업데이트하지 못했습니다.",
     "failed_to_move_category": "카테고리를 이동하지 못했습니다.",
-    "failed_to_reset_budget_groups": "예산 그룹을 재설정하지 못했습니다.",
     "plan_copied": "계획이 복사되었습니다.",
     "spending_settings_updated": "지출 설정이 업데이트되었습니다.",
     "failed_to_update_spending_settings": "지출 설정을 업데이트하지 못했습니다.",

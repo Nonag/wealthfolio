@@ -3,6 +3,7 @@ import { getBudgetGroupLabel } from "@/features/spending/lib/labels";
 import { useMemo, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
+import { toast } from "sonner";
 
 import {
   AlertDialog,
@@ -166,6 +167,10 @@ export function BudgetEditor({ mode, periodKey }: BudgetEditorProps) {
           }
           onUpdateGroup={(patch) => mutations.updateGroup.mutate({ id: row.group.id, patch })}
           onDeleteGroup={() => {
+            if (findGroupRollover(rolloverSettings, row.group.id)) {
+              toast.error(t("spending:budgetEditor.deleteGroupRolloverBlocked"));
+              return;
+            }
             const target =
               groups.find((g) => g.key === "other" && g.id !== row.group.id) ??
               groups.find((g) => g.id !== row.group.id);
@@ -176,7 +181,7 @@ export function BudgetEditor({ mode, periodKey }: BudgetEditorProps) {
               });
             }
           }}
-          canDelete={!row.group.isSystem && groups.some((g) => g.id !== row.group.id)}
+          canDelete={row.group.key !== "other" && groups.some((g) => g.id !== row.group.id)}
           deletePending={mutations.removeGroup.isPending}
           onSaveGroupRollover={(enabled, startingBalance) =>
             mutations.upsertRollover.mutate({
@@ -220,15 +225,6 @@ export function BudgetEditor({ mode, periodKey }: BudgetEditorProps) {
           >
             <Icons.Plus className="h-3.5 w-3.5" />
             {t("spending:budgetEditor.addGroup")}
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => mutations.resetGroups.mutate()}
-            className="text-muted-foreground hover:text-foreground h-8 gap-1.5 px-2 text-xs"
-          >
-            <Icons.Refresh className="h-3.5 w-3.5" />
-            {t("spending:budgetEditor.resetDefaults")}
           </Button>
         </div>
       )}
@@ -669,11 +665,9 @@ function GroupBudgetSection({
                 })}
               </AlertDialogTitle>
               <AlertDialogDescription>
-                {row.categories.length > 0
-                  ? t("spending:budgetEditor.deleteGroupWithCategories", {
-                      count: row.categories.length,
-                    })
-                  : t("spending:budgetEditor.cannotUndo")}
+                {t("spending:budgetEditor.deleteGroupWithCategories", {
+                  count: row.categories.length,
+                })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -719,7 +713,10 @@ function GroupBudgetSection({
               groupTotal={row.plannedTotal}
               monthMode={monthMode}
               mode={mode}
-              groupRolloverEnabled={row.rolloverEnabled}
+              groupRolloverEnabled={groupRollover?.enabled ?? false}
+              rolloverEnabled={
+                findCategoryRollover(rolloverSettings, category.categoryId)?.enabled ?? false
+              }
               onSaveTarget={onSaveCategoryTarget}
               onDeleteOverride={onDeleteOverride}
               onMoveCategory={onMoveCategory}
@@ -1053,6 +1050,8 @@ function GroupEditDialogBody({
               }}
               className="text-foreground placeholder:text-muted-foreground/50 w-full bg-transparent text-sm outline-none"
               autoFocus
+              disabled={group.key === "other"}
+              title={group.key === "other" ? t("spending:budgetEditor.catchAllLocked") : undefined}
             />
           </div>
         </div>
@@ -1129,6 +1128,7 @@ function BudgetCategoryLine({
   monthMode,
   mode,
   groupRolloverEnabled,
+  rolloverEnabled,
   onSaveTarget,
   onDeleteOverride,
   onMoveCategory,
@@ -1142,6 +1142,7 @@ function BudgetCategoryLine({
   monthMode: boolean;
   mode: BudgetEditorMode;
   groupRolloverEnabled: boolean;
+  rolloverEnabled: boolean;
   onSaveTarget: (row: BudgetCategoryRow, amount: string) => void;
   onDeleteOverride: (target: BudgetTarget | undefined) => void;
   onMoveCategory: (categoryId: string, groupId: string) => void;
@@ -1259,7 +1260,7 @@ function BudgetCategoryLine({
                 disabled={groupRolloverEnabled}
                 closeOnClick={false}
                 onClick={() => {
-                  onToggleRollover(row, !row.rolloverEnabled);
+                  onToggleRollover(row, !rolloverEnabled);
                 }}
                 className="text-xs"
               >
@@ -1268,7 +1269,7 @@ function BudgetCategoryLine({
                 <span className="text-muted-foreground text-2xs">
                   {groupRolloverEnabled
                     ? t("spending:budgetEditor.groupWide")
-                    : row.rolloverEnabled
+                    : rolloverEnabled
                       ? t("spending:budgetEditor.on")
                       : t("spending:budgetEditor.off")}
                 </span>
