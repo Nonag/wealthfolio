@@ -1026,6 +1026,8 @@
     "newGroup": "新群組",
     "addGroup": "新增群組",
     "resetDefaults": "重設為預設值",
+    "resetDefaultsTitle": "將預算群組重設為預設值？",
+    "resetDefaultsDescription": "預設群組將以原本的名稱和顏色恢復，預設分類將移回這些群組。您自行建立的群組、分類和預算金額將予以保留。此操作無法復原。",
     "defaultMonthlyPlan": "預設每月計畫",
     "monthlyPlan": "每月計畫",
     "fxNote": "目標以 {{currency}} 輸入；實際金額採用 {{asOf}} 前後的匯率。",

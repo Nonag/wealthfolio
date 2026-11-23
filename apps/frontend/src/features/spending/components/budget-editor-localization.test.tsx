@@ -34,6 +34,7 @@ import {
   deleteBudgetGroup,
   deleteBudgetRolloverSetting,
   getBudget,
+  resetBudgetGroups,
   updateBudgetGroup,
   upsertBudgetRolloverSetting,
 } from "../adapters/budget";
@@ -871,3 +872,26 @@ it.each([
     expect(upsertBudgetRolloverSetting).not.toHaveBeenCalled();
   },
 );
+
+it("resets budget groups only after confirmation", async () => {
+  const budget = budgetSnapshot();
+  vi.mocked(resetBudgetGroups).mockResolvedValue(budget);
+  const { user } = await setup(budget);
+  const openReset = () =>
+    user.click(screen.getByRole("button", { name: zhSpending.budgetEditor.resetDefaults }));
+
+  await openReset();
+  const dialog = await screen.findByRole("alertdialog");
+  within(dialog).getByText(zhSpending.budgetEditor.resetDefaultsTitle);
+  await user.click(within(dialog).getByRole("button", { name: zhCommon.cancel }));
+  await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+  expect(resetBudgetGroups).not.toHaveBeenCalled();
+
+  await openReset();
+  await user.click(
+    within(await screen.findByRole("alertdialog")).getByRole("button", {
+      name: zhSpending.budgetEditor.resetDefaults,
+    }),
+  );
+  await waitFor(() => expect(resetBudgetGroups).toHaveBeenCalledTimes(1));
+});

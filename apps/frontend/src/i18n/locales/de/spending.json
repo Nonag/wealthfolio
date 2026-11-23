@@ -1026,6 +1026,8 @@
     "newGroup": "Neue Gruppe",
     "addGroup": "Gruppe hinzufügen",
     "resetDefaults": "Auf Standard zurücksetzen",
+    "resetDefaultsTitle": "Budgetgruppen zurücksetzen?",
+    "resetDefaultsDescription": "Die Standardgruppen werden mit ihren ursprünglichen Namen und Farben wiederhergestellt, und die Standardkategorien werden wieder in sie verschoben. Eigene Gruppen, Kategorien und Budgetbeträge bleiben erhalten. Dies kann nicht rückgängig gemacht werden.",
     "defaultMonthlyPlan": "Standard-Monatsplan",
     "monthlyPlan": "Monatsplan",
     "fxNote": "Ziele werden in {{currency}} eingegeben; Ist-Werte verwenden Wechselkurse um {{asOf}}.",

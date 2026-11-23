@@ -1080,6 +1080,8 @@
     "newGroup": "Nuovo gruppo",
     "addGroup": "Aggiungi gruppo",
     "resetDefaults": "Ripristina valori predefiniti",
+    "resetDefaultsTitle": "Ripristinare i gruppi di budget?",
+    "resetDefaultsDescription": "I gruppi predefiniti tornano con i nomi e i colori originali e le categorie predefinite vengono spostate di nuovo al loro interno. I tuoi gruppi, le tue categorie e gli importi di budget vengono mantenuti. L'operazione non può essere annullata.",
     "defaultMonthlyPlan": "Piano mensile predefinito",
     "monthlyPlan": "Piano mensile",
     "fxNote": "Gli obiettivi sono inseriti in {{currency}}; i valori effettivi usano i tassi di cambio intorno al {{asOf}}.",

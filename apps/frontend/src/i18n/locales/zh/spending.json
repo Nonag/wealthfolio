@@ -1017,6 +1017,8 @@
     "newGroup": "新分组",
     "addGroup": "添加分组",
     "resetDefaults": "重置为默认值",
+    "resetDefaultsTitle": "将预算分组重置为默认值？",
+    "resetDefaultsDescription": "默认分组将以原来的名称和颜色恢复，默认分类将移回这些分组。您自己创建的分组、分类和预算金额将予以保留。此操作无法撤销。",
     "defaultMonthlyPlan": "默认每月计划",
     "monthlyPlan": "每月计划",
     "fxNote": "目标以 {{currency}} 录入；实际值使用 {{asOf}} 前后的汇率。",

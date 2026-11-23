@@ -1017,6 +1017,8 @@
     "newGroup": "新しいグループ",
     "addGroup": "グループを追加",
     "resetDefaults": "既定値に戻す",
+    "resetDefaultsTitle": "予算グループを既定値に戻しますか？",
+    "resetDefaultsDescription": "既定のグループが元の名前と色で復元され、既定のカテゴリはそれらのグループに戻されます。自分で作成したグループ、カテゴリ、予算額は保持されます。この操作は取り消せません。",
     "defaultMonthlyPlan": "既定の月次プラン",
     "monthlyPlan": "月次プラン",
     "fxNote": "目標額は{{currency}}で入力します。実績は{{asOf}}前後の為替レートを使用します。",

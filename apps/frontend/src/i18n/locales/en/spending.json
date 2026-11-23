@@ -1026,6 +1026,8 @@
     "newGroup": "New group",
     "addGroup": "Add group",
     "resetDefaults": "Reset to defaults",
+    "resetDefaultsTitle": "Reset budget groups?",
+    "resetDefaultsDescription": "Built-in groups come back with their original names and colors, and built-in categories move back into them. Your own groups, categories and budget amounts are kept. This can't be undone.",
     "defaultMonthlyPlan": "Default monthly plan",
     "monthlyPlan": "Monthly plan",
     "fxNote": "Targets are entered in {{currency}}; actuals use FX rates around {{asOf}}.",

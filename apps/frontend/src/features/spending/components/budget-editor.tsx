@@ -100,6 +100,7 @@ export function BudgetEditor({ mode, periodKey }: BudgetEditorProps) {
   const targets = budget?.state.targets ?? [];
   const rolloverSettings = budget?.state.rolloverSettings ?? [];
   const groups = budget?.state.groups ?? [];
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
 
   const saveGroupBuffer = (row: BudgetGroupRow, amount: string) => {
     mutations.upsertTarget.mutate({
@@ -231,12 +232,31 @@ export function BudgetEditor({ mode, periodKey }: BudgetEditorProps) {
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => mutations.resetGroups.mutate()}
+            onClick={() => setConfirmResetOpen(true)}
             className="text-muted-foreground hover:text-foreground h-8 gap-1.5 px-2 text-xs"
           >
             <Icons.Refresh className="h-3.5 w-3.5" />
             {t("spending:budgetEditor.resetDefaults")}
           </Button>
+          <AlertDialog open={confirmResetOpen} onOpenChange={setConfirmResetOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t("spending:budgetEditor.resetDefaultsTitle")}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t("spending:budgetEditor.resetDefaultsDescription")}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t("common:cancel")}</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => mutations.resetGroups.mutate()}
+                  variant="destructive"
+                >
+                  {t("spending:budgetEditor.resetDefaults")}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       )}
     </div>

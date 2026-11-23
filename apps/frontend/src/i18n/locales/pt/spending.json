@@ -1080,6 +1080,8 @@
     "newGroup": "Novo grupo",
     "addGroup": "Adicionar grupo",
     "resetDefaults": "Restaurar valores padrão",
+    "resetDefaultsTitle": "Restaurar os grupos de orçamento?",
+    "resetDefaultsDescription": "Os grupos padrão voltam com os nomes e cores originais, e as categorias padrão voltam para eles. Seus próprios grupos, categorias e valores de orçamento são mantidos. Esta ação não pode ser desfeita.",
     "defaultMonthlyPlan": "Plano mensal padrão",
     "monthlyPlan": "Plano mensal",
     "fxNote": "As metas são inseridas em {{currency}}; os dados reais usam taxas de câmbio em torno de {{asOf}}.",
