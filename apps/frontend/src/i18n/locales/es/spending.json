@@ -1080,6 +1080,8 @@
     "newGroup": "Nuevo grupo",
     "addGroup": "Añadir grupo",
     "resetDefaults": "Restablecer valores predeterminados",
+    "resetDefaultsTitle": "¿Restablecer los grupos de presupuesto?",
+    "resetDefaultsDescription": "Los grupos predeterminados vuelven con sus nombres y colores originales, y las categorías predeterminadas vuelven a ellos. Los grupos y categorías propios, así como los importes de presupuesto, se conservan. Esta acción no se puede deshacer.",
     "defaultMonthlyPlan": "Plan mensual predeterminado",
     "monthlyPlan": "Plan mensual",
     "fxNote": "Los objetivos se introducen en {{currency}}; los datos reales usan tipos de cambio en torno a {{asOf}}.",

@@ -1080,6 +1080,8 @@
     "newGroup": "Nouveau groupe",
     "addGroup": "Ajouter un groupe",
     "resetDefaults": "Réinitialiser aux valeurs par défaut",
+    "resetDefaultsTitle": "Réinitialiser les groupes de budget ?",
+    "resetDefaultsDescription": "Les groupes par défaut sont rétablis avec leurs noms et couleurs d’origine, et les catégories par défaut y sont replacées. Vos propres groupes, catégories et montants budgétaires sont conservés. Cette action est irréversible.",
     "defaultMonthlyPlan": "Plan mensuel par défaut",
     "monthlyPlan": "Plan mensuel",
     "fxNote": "Les objectifs sont saisis en {{currency}} ; les réalisés utilisent les taux de change autour du {{asOf}}.",

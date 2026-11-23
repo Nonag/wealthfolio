@@ -1017,6 +1017,8 @@
     "newGroup": "새 그룹",
     "addGroup": "그룹 추가",
     "resetDefaults": "기본값으로 재설정",
+    "resetDefaultsTitle": "예산 그룹을 기본값으로 재설정할까요?",
+    "resetDefaultsDescription": "기본 그룹이 원래 이름과 색상으로 복원되고, 기본 카테고리는 해당 그룹으로 다시 이동합니다. 직접 만든 그룹, 카테고리, 예산 금액은 유지됩니다. 이 작업은 되돌릴 수 없습니다.",
     "defaultMonthlyPlan": "기본 월간 계획",
     "monthlyPlan": "월간 계획",
     "fxNote": "목표 금액은 {{currency}}로 입력되며, 실적은 {{asOf}} 기준 환율을 사용합니다.",
